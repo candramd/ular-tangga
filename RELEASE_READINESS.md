@@ -1,6 +1,6 @@
 # Ular Tangga static migration and release runbook
 
-Status: **migration in progress; do not publish until the remaining release gates pass.** The intended runtime is a Next.js static export on GitHub Pages, with browser requests sent to Supabase PostgREST RPC. No Go service is required after cutover. The prior Go service is stopped; do not restart it alongside the Supabase writer.
+Status: **static site published for verification; migration cutover is not yet release-ready.** The runtime is a Next.js static export on GitHub Pages, with browser requests sent to Supabase PostgREST RPC. The prior Go service is stopped; do not restart it alongside the Supabase writer.
 
 ## Verification checkpoint — 2026-10-13
 
@@ -12,10 +12,11 @@ Completed evidence:
 - The isolated SQL fixture covers admin and game RPC flows, privacy, replay behavior, and event sequencing.
 - After Go stopped and released its writer lock, the browser-facing PostgREST RPC smoke passed with one temporary QA guest, local student, question, room, and game. It verified private answer fields, wrong-turn and locked-dice rejection, ten parallel state/sync reads, correct-answer idempotency and exactly-once score, a dice result in range, ascending event sequences, and an empty poll after the cursor was drained. Existing leaderboard identities remained present and scores did not decrease.
 - The smoke cleanup removed only its captured QA IDs and request/event keys. Post-cleanup aggregates returned to the pre-cutover baseline: 4 users, 0 questions, 1 room, 1 game, 4 stat rows, and snapshot version 1. The live state digest still matches the protected pre-cutover backup; no existing row or teacher data was reset.
+- The first published deployment completed successfully in [GitHub Actions run 38424248365](https://github.com/candramd/ular-tangga/actions/runs/38424248365). The site at https://candramd.github.io/ular-tangga/ returned HTTP 200 for `/`, `/admin/`, and fragment-based room/game URLs. All referenced JavaScript/CSS chunks returned 200, and all 52 font URLs resolved relative to the deployed stylesheet returned 200.
+- Desktop browser review of the published game confirmed the original WebGL board, snakes, and dice render. A fresh reload of a room invite fragment opened the expected login modal. At a 390×844 mobile viewport, the canvas rendered and document width matched the viewport with no horizontal overflow. This was read-only; no new public guest was created.
 
 Still pending:
 
-- The published GitHub Pages URL verification.
 - Snapshot restore/release rollback rehearsal, visual review from the published URL, and quota/latency/load assessment. These have not been completed; a passing export or schema check is not evidence of these release gates.
 
 ## Hosting configuration
@@ -54,10 +55,10 @@ If a release gate fails, stop browser traffic to the new RPC-backed release and 
 ## Release gates
 
 - [x] Static export completes and includes `/index.html` and `/admin/index.html`; server-only marker scan and WOFF2 asset check pass.
-- [ ] GitHub Pages project path, assets, fonts, and hash navigation work from the published URL.
+- [x] GitHub Pages project path, referenced assets/fonts, and hash-navigation entry URLs return successfully from the published URL (HTTP check; visual review remains pending).
 - [x] Supabase migrations 002–005 and board seed are applied; the live state snapshot aggregates stayed unchanged. Browser-role access checks and broad RPC coverage pass in the isolated SQL fixture.
-- [x] RPC authentication, privacy, mutation authorization, idempotency, event sequence, and expiry behavior pass against isolated data; the final bounded live RPC smoke is still pending.
+- [x] RPC authentication, privacy, mutation authorization, idempotency, event sequence, and expiry behavior pass against isolated data; bounded live RPC smoke and exact-ID cleanup pass.
 - [ ] Existing teacher data has a reviewed migration and restore/parity rehearsal.
-- [ ] Published game and graphics visual review passes; original graphics checksum is retained and verified locally.
+- [x] Published desktop/mobile visual review passes for the board, graphics, and room invite route; original graphics checksum is retained and verified locally.
 - [ ] Supabase quota/latency behavior is acceptable under active polling and reconnect load.
 - [ ] Rollback to the prior frontend and single Go writer has been rehearsed.
