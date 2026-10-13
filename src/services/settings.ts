@@ -20,9 +20,9 @@ export function readStoredSetting(key: string, legacyKey: string, storage: Stora
   return null;
 }
 
-export function resolveQuality(saved: string | null, width: number): "low" | "high" {
+export function resolveQuality(saved: string | null, _width: number): "low" | "high" {
   if (saved === "low" || saved === "high") return saved;
-  return width < 768 ? "low" : "high";
+  return "high";
 }
 
 export function resolveReducedMotion(saved: string | null, osPrefersReduce: boolean): boolean {

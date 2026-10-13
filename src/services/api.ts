@@ -38,7 +38,7 @@ export async function claimLocalMigrationSession(): Promise<boolean> {
   } catch { return false; }
 }
 
-export async function api<T>(path: string, body?: Record<string, unknown>, clientRequestId?: string, method?: "GET" | "POST" | "DELETE"): Promise<T> {
+export async function api<T>(path: string, body?: Record<string, unknown>, clientRequestId?: string, method?: "GET" | "POST" | "PATCH" | "DELETE"): Promise<T> {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!base || !key) throw new ApiError("CONFIG_MISSING", "Layanan Supabase belum dikonfigurasi. Hubungi pengelola aplikasi.", 0);
@@ -55,6 +55,7 @@ export async function api<T>(path: string, body?: Record<string, unknown>, clien
   }
   if (envelope.meta?.sessionToken) { try { localStorage.setItem(SESSION_KEY, envelope.meta.sessionToken); } catch {} }
   if (envelope.meta?.adminToken) { try { localStorage.setItem(ADMIN_KEY, envelope.meta.adminToken); } catch {} }
-  if (path === "/admin/session/logout" || path === "/auth/logout") { try { localStorage.removeItem(ADMIN_KEY); if (path === "/auth/logout") localStorage.removeItem(SESSION_KEY); } catch {} }
+  if (path === "/admin/session/logout") { try { localStorage.removeItem(ADMIN_KEY); } catch {} }
+  if (path === "/auth/logout") { try { localStorage.removeItem(SESSION_KEY); } catch {} }
   return envelope.data as T;
 }

@@ -15,7 +15,7 @@ export function connectGame(roomId: string, gameId?: string) {
   const queue = createEventQueue<GameEvent>(({ event, payload, timestamp, turnNumber }) => {
     if (event === "room:state") store().setRoom(payload as Room);
     if (event === "game:state") store().setGame(payload as Game);
-    if (event === "question:result") store().setResult(payload as AnswerResult);
+    if (event === "question:result") store().setResult(payload as AnswerResult, turnNumber ?? store().game?.turnNumber);
     if (event === "dice:rolled") {
       const state = store().game;
       store().setDiceRoll({ id: `${state?.id}:${turnNumber}:${timestamp}`, value: (payload as { value: number }).value, startedAt: Date.now() });

@@ -1,4 +1,4 @@
-export type User = { id: string; username: string; xp: number; coins: number; level: number; synthetic?: boolean };
+export type User = { id: string; username: string; xp: number; coins: number; level: number; synthetic?: boolean; classroomHost?: boolean };
 export type Player = User & { position: number; isConnected: boolean };
 export type Room = {
   id: string; code: string; hostId: string; status: "waiting" | "playing" | "finished";

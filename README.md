@@ -52,4 +52,4 @@ Sinkronisasi permainan melakukan polling RPC sekitar 1,2 detik saat game berlang
 
 ## Status rilis
 
-Repositori ini sedang dalam cutover dan belum dinyatakan siap publik. Lihat [RELEASE_READINESS.md](RELEASE_READINESS.md) untuk bukti verifikasi, pekerjaan yang masih menunggu, dan batasan rollback. Jangan menerbitkan situs sebelum gate yang tersisa disetujui.
+Situs statis dan cutover Supabase RPC sudah dipublikasikan serta lulus pemeriksaan fungsional dasar; verifikasi rollback snapshot dan beban/kuota masih terbuka. Alur kelas mendukung guru sebagai pengendali yang tidak masuk daftar pemain, 2–4 pemain anak, dan perubahan nama profil tanpa mengganti identitas guest. Lihat [RELEASE_READINESS.md](RELEASE_READINESS.md) untuk bukti, batasan, dan status UX trial terbaru.

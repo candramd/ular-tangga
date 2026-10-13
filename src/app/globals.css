@@ -105,6 +105,7 @@ main { max-width: 1580px; margin: 0 auto; padding: 32px 37px 0; }
 .button.secondary:not(:disabled):hover { background: var(--color-soft); border-color: var(--color-accent); }
 .button.full { width: 100%; }.button.small-button { min-height: 33px; padding: 7px 11px; font-size: 10px; }
 .quick-button { margin-top: 21px; width: 100%; }.quick-button > svg:last-child { margin-left: auto; }.quick-button > svg:first-child { margin-right: auto; }
+.local-primary { justify-content: flex-start; min-height: 56px; margin-bottom: 12px; }.local-primary > span { display: grid; flex: 1; text-align: left; white-space: normal; }.local-primary small { font-size: 10px; font-weight: 700; opacity: .9; }
 .button-caption { font-size: 8px; color: var(--color-muted); display: block; text-align: center; margin-top: 11px; }
 .or-divider { display: flex; align-items: center; margin: 21px 0 16px; gap: 10px; font-size: 9px; color: var(--color-muted); }.or-divider::before, .or-divider::after { content: ""; flex: 1; height: 1px; background: var(--color-line); }
 .check-label { display: flex; gap: 6px; align-items: center; font-size: 8px; color: var(--color-muted); margin: 10px 0 2px; }.check-label input { accent-color: var(--color-accent); }
@@ -202,6 +203,91 @@ main { max-width: 1580px; margin: 0 auto; padding: 32px 37px 0; }
 .island-shell .room-code.local h2 { color: #684323; }
 .island-shell .join-button.local-join > svg { color: #228a59; }
 @media (max-width: 700px) { .pass-hint { font-size: 12px; } .local-player-row .icon-button { width: 47px; height: 47px; } .join-button.local-join { font-size: 11px; } }
+
+/* Small session controls reuse the existing palette and remain reachable on phones. */
+.session-control { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--color-line); border-radius: 999px; background: var(--color-surface); color: var(--color-ink); padding: 8px 12px; font: inherit; font-size: 11px; font-weight: 800; }
+.home-button { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 999px; background: transparent; color: var(--color-muted); padding: 8px 10px; font: inherit; font-size: 11px; font-weight: 800; }
+.home-button:hover, .home-button:focus-visible { color: var(--color-accent); background: var(--color-soft); }
+.session-control svg:first-child { color: var(--color-accent); }
+.session-control span { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.modal-actions .button { flex: 1; }
+.session-exit { color: var(--color-error); }
+.resume-card > h2 { font-size: 24px; margin: 18px 0 8px; }
+.resume-card .panel-description { line-height: 1.7; }
+.graphics-toggle { position: absolute; z-index: 4; top: 7px; right: 7px; min-height: 44px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid var(--color-line); border-radius: 999px; background: var(--color-surface); color: var(--color-accent); box-shadow: 0 2px 8px var(--color-shadow); font-size: 10px; font-weight: 800; }
+.graphics-toggle:hover, .graphics-toggle:focus-visible { background: var(--color-soft); }
+.quality-note { margin-top: 8px; color: var(--color-muted); font-size: 12px; line-height: 1.6; }
+.has-active-game .players-strip { scroll-margin-top: 15px; }
+.board-view-toggle { min-height: 44px; display: none; align-items: center; justify-content: center; gap: 6px; padding: 0 11px; border: 1px solid #d5c19d; border-radius: 11px; background: #fff9e9; color: #684323; box-shadow: 0 3px 0 #c5a47250; font: inherit; font-size: 11px; font-weight: 800; white-space: nowrap; }
+.board-view-toggle:hover, .board-view-toggle:focus-visible { background: #fff2c8; }
+.board-view-toggle:focus-visible { outline: 3px solid #d9952d; outline-offset: 2px; }
+@media (max-width: 700px) {
+  .has-active-game { height: 100dvh; min-height: 0; overflow: hidden; }
+  .has-active-game .workspace { height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .has-active-game .topbar { height: 52px; min-height: 52px; padding: 0 10px; flex: 0 0 52px; }
+  .has-active-game .topbar-player { gap: 4px; }
+  .has-active-game .fullscreen-button { min-width: 40px; min-height: 40px; padding: 8px; }
+  .has-active-game .fullscreen-button span, .has-active-game .home-button span { display: none; }
+  .has-active-game .home-button { min-width: 40px; min-height: 40px; justify-content: center; padding: 8px; }
+  .has-active-game .session-control { min-height: 40px; max-width: 116px; padding: 7px 9px; gap: 5px; }
+  .has-active-game .session-control span { max-width: 58px; }
+  .has-active-game main { flex: 1 1 auto; min-height: 0; width: 100%; max-width: none; display: flex; flex-direction: column; overflow: hidden; padding: 7px 8px 8px; }
+  .has-active-game .alert { flex: 0 0 auto; max-height: 72px; overflow-y: auto; padding: 7px 9px; margin-bottom: 5px; font-size: 10px; }
+  .has-active-game .adventure-layout { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+  .has-active-game .map-card { order: 0; flex: 0 0 32%; min-height: 150px; border-radius: 10px; }
+  .has-active-game .map-heading, .has-active-game .map-footer { display: none; }
+  .has-active-game .scene-container { flex: 1 1 auto; height: auto; min-height: 0; }
+  .has-active-game .scene-help { display: none; }
+  .has-active-game .map-caption { left: 7px; bottom: 5px; font-size: 8px; padding: 4px 6px; }
+  .has-active-game .scene-controls { right: 4px; bottom: 3px; gap: 3px; }
+  .has-active-game .scene-controls .icon-button { min-width: 40px; min-height: 40px; width: 40px; height: 40px; }
+  .has-active-game .play-panel { order: 1; flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 10px 12px 12px; border-radius: 10px; scrollbar-gutter: stable; }
+  .has-active-game .turn-player { margin: 7px 0; gap: 8px; }
+  .has-active-game .turn-player .avatar { width: 34px; height: 34px; border-width: 2px; }
+  .has-active-game .pass-hint { margin: 5px 0 8px; padding: 7px 9px; font-size: 11px; }
+  .has-active-game .answer-feedback { margin: 5px 0 8px; padding: 7px 9px; font-size: 11px; line-height: 1.45; }
+  .has-active-game .question-meta { padding-top: 7px; font-size: 10px; }
+  .has-active-game .question-text { font-size: 18px; line-height: 1.28; margin: 7px 0 9px; }
+  .has-active-game .answer-options { gap: 6px; margin-bottom: 9px; }
+  .has-active-game .answer-option { min-height: 44px; padding: 9px 10px; font-size: 14px; line-height: 1.3; }
+  .has-active-game .play-panel .button { min-height: 46px; }
+  .has-active-game .dice-panel { padding: 4px 0; }
+  .has-active-game .dice-panel > svg { width: 42px; height: 42px; margin: 0 auto 4px; }
+  .has-active-game .dice-panel h2 { font-size: 24px; }
+  .has-active-game .dice-panel h3 { font-size: 15px; }
+  .has-active-game .dice-panel p { margin: 5px 0 9px; font-size: 11px; }
+  .has-active-game .play-panel > .subtle-button { min-height: 44px; margin-top: 6px; }
+  .has-active-game .mobile-roster { margin-top: 6px; border-top: 1px solid var(--color-line); }
+  .has-active-game .mobile-roster summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--color-accent); font-size: 12px; font-weight: 800; }
+  .has-active-game .mobile-roster-body { padding-bottom: 8px; }
+  .has-active-game .mobile-roster .room-players { margin: 4px 0 8px; gap: 4px; }
+  .has-active-game .mobile-roster .room-player { min-height: 40px; }
+  .has-active-game .mobile-roster .room-player > span:last-child { margin-left: auto; color: var(--color-muted); font-size: 11px; }
+  .has-active-game .mobile-roster .leaderboard-list > div { padding: 8px 0; }
+  .has-active-game .players-strip, .has-active-game .class-scoreboard, .has-active-game .journey-guide, .has-active-game .bottom-row, .has-active-game .directory, .has-active-game .page-footer { display: none; }
+  .has-active-game .board-view-toggle { display: inline-flex; min-height: 44px; padding: 0 9px; }
+  .has-active-game.board-expanded .map-card { flex: 1 1 auto; min-height: 0; }
+  .has-active-game.board-expanded .play-panel { flex: 0 0 102px; max-height: 102px; padding: 5px 9px; overflow: hidden; }
+  .has-active-game.board-expanded .play-panel > * { display: none; }
+  .has-active-game.board-expanded .play-panel > .turn-header,
+  .has-active-game.board-expanded .play-panel > .turn-player,
+  .has-active-game.board-expanded .play-panel > .question-meta { display: flex; }
+  .has-active-game.board-expanded .play-panel > .turn-header { min-height: 24px; margin: 0; }
+  .has-active-game.board-expanded .play-panel > .turn-player { min-height: 38px; margin: 0; }
+  .has-active-game.board-expanded .play-panel > .question-meta { min-height: 24px; padding: 2px 0 0; }
+  .has-active-game.board-expanded .play-panel > .turn-player h3 { font-size: 13px; }
+  .has-active-game.board-expanded .play-panel > .turn-player span { font-size: 10px; }
+  .has-active-game.board-expanded .board-toolbar { padding: 6px 8px; gap: 4px 8px; }
+  .has-active-game.board-expanded .scene-help { display: none; }
+  .has-active-game.board-expanded .board-toolbar .map-caption { font-size: 9px; }
+  .has-active-game.board-expanded .board-toolbar .scene-controls { gap: 4px; }
+  .has-active-game.board-expanded .scene-controls .icon-button { min-width: 40px; min-height: 40px; width: 40px; height: 40px; }
+  .session-control { padding: 8px 10px; max-width: 132px; }
+  .session-control span { max-width: 72px; }
+  .home-button span { display: none; }
+  .modal-actions { flex-direction: column-reverse; }
+}
 .island-shell .players-strip { margin-top: 20px; }
 .island-shell .player-progress { background: #f5fbff; border: 2px solid #d1e8f7; }
 .island-shell .player-progress.current { border-color: #f0c252; }
@@ -233,6 +319,8 @@ main { max-width: 1580px; margin: 0 auto; padding: 32px 37px 0; }
   .fullscreen-button span { display: none; }
   .island-shell .coin-balance { padding: 6px 10px; }
   .island-shell .adventure-layout { display: flex; flex-direction: column; min-height: 0; }
+  .island-shell.has-front-panel:not(.has-active-game) .play-panel { order: 0; margin-top: 0; }
+  .island-shell.has-front-panel:not(.has-active-game) .map-card { order: 1; }
   .island-shell .map-card { min-height: 470px; }
   .island-shell .scene-container { height: 370px; min-height: 370px; }
   .island-shell .map-heading { padding: 16px 18px; }
@@ -243,6 +331,29 @@ main { max-width: 1580px; margin: 0 auto; padding: 32px 37px 0; }
   .board-toolbar { padding: 12px 14px; gap: 5px 12px; }
   .scene-help { font-size: 9px; }
   .island-shell .players-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  /* Keep the active-game board compact; this block follows the island-wide
+     mobile sizing rules so their large preview minimums cannot override it. */
+  .island-shell.has-active-game .workspace { flex: 0 1 calc(100dvh - 62px); height: calc(100dvh - 62px); min-height: 0; overflow: hidden; }
+  .island-shell.has-active-game main { padding: 7px 8px 8px; }
+  .island-shell.has-active-game .adventure-layout { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; gap: 6px; overflow: hidden; }
+  .island-shell.has-active-game .map-card { order: 0; flex: 0 0 32%; min-height: 0; height: auto; border-radius: 10px; }
+  .island-shell.has-active-game .map-heading,
+  .island-shell.has-active-game .map-footer { display: none; }
+  .island-shell.has-active-game .scene-container { flex: 1 1 auto; height: auto; min-height: 0; }
+  .island-shell.has-active-game .scene-container section,
+  .island-shell.has-active-game .scene-container section > div:first-child,
+  .island-shell.has-active-game .scene-container section > div:first-child canvas { min-height: 0 !important; }
+  .island-shell.has-active-game .play-panel { order: 1; flex: 1 1 0; width: 100%; min-height: 0; max-height: none; margin: 0; padding: 10px 12px 12px; overflow-y: auto; overscroll-behavior: contain; }
+  .island-shell.has-active-game .pass-hint { margin: 4px 0 6px; padding: 5px 8px; font-size: 10px; line-height: 1.25; }
+  .island-shell.has-active-game .pass-hint > svg { width: 13px; height: 13px; }
+  .island-shell.has-active-game .question-text { font-size: 17px; line-height: 1.2; margin: 5px 0 7px; }
+  .island-shell.has-active-game .answer-options { gap: 5px; margin-bottom: 7px; }
+  .island-shell.has-active-game .answer-option { min-height: 44px; padding: 7px 9px; }
+  .island-shell.has-active-game .play-panel .button { min-height: 44px; }
+  .island-shell.has-active-game:not(.board-expanded) .board-dice-result { right: 6px; bottom: 6px; max-width: 90px; padding: 4px 6px; border-radius: 7px; font-size: 9px; line-height: 1.2; text-align: center; }
+  .island-shell.has-active-game.board-expanded .map-card { flex: 1 1 auto; min-height: 0; }
+  .island-shell.has-active-game.board-expanded .play-panel { flex: 0 0 102px; min-height: 102px; max-height: 102px; padding: 5px 9px; overflow: hidden; }
 }
 @media (max-width: 380px) {
   .island-shell .sidebar { width: 100%; padding: 6px 6px max(6px, env(safe-area-inset-bottom)); justify-content: center; }

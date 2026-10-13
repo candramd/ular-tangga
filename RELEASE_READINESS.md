@@ -1,24 +1,25 @@
 # Ular Tangga static migration and release runbook
 
-Status: **published; classroom functionality has passed bounded verification.** The runtime is a Next.js static export on GitHub Pages, with browser requests sent to Supabase PostgREST RPC. The prior Go service is stopped; do not restart it alongside the Supabase writer. Snapshot restore/rollback rehearsal and quota/latency/load assessment remain operational follow-up; they have not been validated here.
+Status: **static site and Supabase RPC cutover are live; functional checks pass, while operational release checks remain open.** The runtime is a Next.js static export on GitHub Pages, with browser requests sent to Supabase PostgREST RPC. The prior Go service is stopped; do not restart it alongside the Supabase writer.
 
 ## Verification checkpoint — 2026-10-13
 
 Completed evidence:
 
-- The frontend unit suite passed 54/54, the static export built with `/` and `/admin/` entries, and the export scanner found no server-only credential/config markers. The six protected graphics and motion files still match the recorded checksum baseline.
+- The frontend unit suite passed 56/56, the static export built with `/` and `/admin/` entries, and the export scanner found no server-only credential/config markers. The six protected graphics and motion files still match the recorded checksum baseline.
 - Go tests pass, including a regression for migrating legacy NUL-delimited local-student roster keys. The migrated snapshot passed a read-only PostgreSQL JSONB cast against the local QA fixture.
-- Supabase migrations 002–005 and the board seed were installed. The recorded live snapshot before and after the DDL/seed had the same version, timestamp, and aggregate user/room/game/stat/session counts. The existing browser session was claimed through the local bridge, and Supabase restored its previous room, four players, and cumulative ranks. The Go bridge was then stopped.
+- Supabase migrations 002–006 and the board seed are installed. Migration 006 was applied under an advisory transaction lock and a row lock, with snapshot version and state digest checked unchanged across the DDL transaction. Existing browser identity, room, and cumulative ranks were restored through the local bridge before the Go bridge was stopped. Later live play has legitimately changed room/game state; no claim is made that the current digest matches the pre-cutover backup.
 - The isolated SQL fixture covers admin and game RPC flows, privacy, replay behavior, and event sequencing.
 - After Go stopped and released its writer lock, the browser-facing PostgREST RPC smoke passed with one temporary QA guest, local student, question, room, and game. It verified private answer fields, wrong-turn and locked-dice rejection, ten parallel state/sync reads, correct-answer idempotency and exactly-once score, a dice result in range, ascending event sequences, and an empty poll after the cursor was drained. Existing leaderboard identities remained present and scores did not decrease.
-- The smoke cleanup removed only its captured QA IDs and request/event keys. Post-cleanup aggregates returned to the pre-cutover baseline: 4 users, 0 questions, 1 room, 1 game, 4 stat rows, and snapshot version 1. Cleanup was limited to captured QA identifiers; it did not restore or overwrite the live snapshot.
+- The earlier bounded RPC smoke and the completed C42A teacher/local-player dogfood trial removed only their exact captured identities and associated keys. A separate older trial identity was preserved because a person may have reused it; it was not part of cleanup. No unrelated public-user rows were targeted.
 - The first published deployment completed successfully in [GitHub Actions run 38424248365](https://github.com/candramd/ular-tangga/actions/runs/38424248365). The site at https://candramd.github.io/ular-tangga/ returned HTTP 200 for `/`, `/admin/`, and fragment-based room/game URLs. All referenced JavaScript/CSS chunks returned 200, and all 52 font URLs resolved relative to the deployed stylesheet returned 200.
-- The dependency security follow-up deployed successfully in [GitHub Actions run 38425344400](https://github.com/candramd/ular-tangga/actions/runs/38425344400). `npm ci` reported 0 vulnerabilities; the 54-test suite and TypeScript check passed. On this final deployment, `/`, `/admin/`, room/game fragment entry URLs, a JavaScript chunk, a stylesheet, and a representative WOFF2 font each returned HTTP 200.
-- Desktop browser review of the published game confirmed the original WebGL board, snakes, and dice render. A fresh reload of a room invite fragment opened the expected login modal. At a 390×844 mobile viewport, the canvas rendered and document width matched the viewport with no horizontal overflow. This was read-only; no new public guest was created.
+- The dependency-patched deployment completed successfully in [GitHub Actions run 38425344400](https://github.com/candramd/ular-tangga/actions/runs/38425344400); the final dependency audit reported zero vulnerabilities.
+- Desktop browser review of the published game confirmed the original WebGL board, snakes, and dice render. A fresh reload of a room invite fragment opened the expected login modal. Browser dogfood at 360×640 and 390×844 confirmed the board remains visible while quiz content scrolls inside its panel, with no horizontal overflow. Home, reload/resume, and logout flows were exercised. These are browser viewport checks; physical-phone rendering and performance have not been verified.
+- The teacher/local-player dogfood flow verified a classroom controller outside the player roster, 2 child players, renaming the same guest identity, game continuation, logout, and child cumulative scores (the two captured values were 1 and 0). The captured trial data was then removed by exact captured keys; no unrelated user data was included.
 
-Operational follow-up not measured in this verification:
+Still pending:
 
-- Snapshot restore/release rollback rehearsal and Supabase quota/latency/load assessment. These have not been completed; the functional checks above do not establish recovery or peak-load behavior.
+- Snapshot restore/release rollback rehearsal and quota/latency/load assessment remain open; a passing export or schema check is not evidence of these release gates.
 
 ## Hosting configuration
 
@@ -56,11 +57,11 @@ If a release gate fails, stop browser traffic to the new RPC-backed release and 
 ## Release gates
 
 - [x] Static export completes and includes `/index.html` and `/admin/index.html`; server-only marker scan and WOFF2 asset check pass.
-- [x] GitHub Pages project path, referenced assets/fonts, and hash-navigation entry URLs return successfully from the published URL.
-- [x] Supabase migrations 002–005 and board seed are applied; the live state snapshot aggregates stayed unchanged. Browser-role access checks and broad RPC coverage pass in the isolated SQL fixture.
+- [x] GitHub Pages project path, referenced assets/fonts, and hash-navigation entry URLs return successfully from the published URL; desktop and mobile visual review also passed.
+- [x] Supabase migrations 002–006 and board seed are applied; snapshot version and state digest were unchanged during the migration 006 transaction. Browser-role access checks and broad RPC coverage pass in the isolated SQL fixture.
 - [x] RPC authentication, privacy, mutation authorization, idempotency, event sequence, and expiry behavior pass against isolated data; bounded live RPC smoke and exact-ID cleanup pass.
-- [x] Existing browser session reconnected to its prior room, four players, and cumulative ranks; pre/post migration snapshot metadata and aggregate counts matched.
-- [ ] Snapshot restore and Go rollback rehearsal completed in an isolated environment.
-- [x] Published desktop/mobile visual review passes for the board, graphics, and room invite route; original graphics checksum is retained and verified locally.
+- [ ] Existing teacher data has a completed restore/rollback rehearsal. The prior browser identity and room were restored during cutover verification, but a full snapshot rollback rehearsal remains open.
+- [x] Desktop browser and 360×640/390×844 viewport reviews pass for the board, graphics, room invite route, in-panel quiz scrolling, home, reload/resume, and logout. Physical phone testing remains unverified.
+- [x] Teacher/local-player dogfood verifies the non-roster classroom controller, 2-player local room, rename preserving guest identity, logout, and child score persistence; cleanup was limited to the captured trial identities and keys. The score values were 1 and 0 across the two children.
 - [ ] Supabase quota/latency behavior is acceptable under active polling and reconnect load.
 - [ ] Rollback to the prior frontend and single Go writer has been rehearsed.

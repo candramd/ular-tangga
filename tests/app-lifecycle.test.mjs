@@ -47,14 +47,16 @@ test("resolveQuality returns saved value when valid", () => {
   assert.equal(resolveQuality("high", 1920), "high");
 });
 
-test("resolveQuality falls back to width-based default on invalid value", () => {
+test("resolveQuality defaults to sharper mode when no valid preference is saved", () => {
   assert.equal(resolveQuality("invalid", 1920), "high");
-  assert.equal(resolveQuality("invalid", 500), "low");
+  assert.equal(resolveQuality("invalid", 500), "high");
 });
 
-test("resolveQuality falls back to width-based default when no stored value", () => {
+test("resolveQuality keeps a fresh phone in sharper mode while respecting saved preferences", () => {
   assert.equal(resolveQuality(null, 1920), "high");
-  assert.equal(resolveQuality(null, 500), "low");
+  assert.equal(resolveQuality(null, 500), "high");
+  assert.equal(resolveQuality("low", 500), "low");
+  assert.equal(resolveQuality("high", 500), "high");
 });
 
 test("resolveReducedMotion returns saved boolean string", () => {
