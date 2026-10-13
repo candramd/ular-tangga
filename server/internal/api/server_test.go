@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/jackc/pgx/v5"
 	"ulartangga/server/internal/engine"
 )
 
@@ -971,6 +973,63 @@ func TestLocalStudentIdentityAccumulatesPerHostOnly(t *testing.T) {
 	}
 	if got := f.s.data.LocalStudentOwners[firstID]; got != host.ID {
 		t.Fatal("local student ownership was not persisted server-side")
+	}
+}
+
+func TestLegacyLocalRosterKeyMigratesBeforePersistence(t *testing.T) {
+	host := engine.User{ID: "teacher-id", Username: "Teacher", Level: 1}
+	student := engine.User{ID: "legacy-student-id", Username: "Nara", Level: 1, Synthetic: true}
+	legacyKey := host.ID + "\x00" + "nara"
+	data := Data{
+		Users:    map[string]engine.User{host.ID: host, student.ID: student},
+		Sessions: map[string]Session{},
+		Rooms: map[string]*engine.Room{
+			"legacy-room": {ID: "legacy-room", HostID: host.ID, Mode: engine.ModeLocal, Players: []engine.Player{{User: host}, {User: student}}},
+		},
+		Games:              map[string]*engine.State{},
+		Requests:           map[string]Cached{},
+		Stats:              map[string]*Stats{student.ID: {CorrectAnswers: 7, GamesPlayed: 3}},
+		LocalStudentOwners: map[string]string{},
+		LocalStudentRoster: map[string]string{legacyKey: student.ID},
+	}
+	raw, err := json.Marshal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &memoryStore{raw: raw}
+	f := setup(t, store)
+
+	newKey := localRosterKey(host.ID, " NARA ")
+	if got := f.s.data.LocalStudentRoster[newKey]; got != student.ID {
+		t.Fatalf("migrated roster identity = %q, want %q", got, student.ID)
+	}
+	if _, exists := f.s.data.LocalStudentRoster[legacyKey]; exists {
+		t.Fatal("legacy NUL roster key remained in live state")
+	}
+	if got := f.s.data.Stats[student.ID]; got == nil || got.CorrectAnswers != 7 || got.GamesPlayed != 3 {
+		t.Fatalf("legacy student score changed: %+v", got)
+	}
+	room := f.s.createLocalRoom(host, []string{"nara"})
+	if got := room.Players[1].ID; got != student.ID {
+		t.Fatalf("local room identity = %q, want preserved ID %q", got, student.ID)
+	}
+	if err := f.s.commit(nil); err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(store.raw, []byte(`\u0000`)) {
+		t.Fatal("persisted snapshot still contains an escaped NUL roster key")
+	}
+	if dsn := os.Getenv("TEST_DATABASE_URL"); dsn != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		conn, err := pgx.Connect(ctx, dsn)
+		if err != nil {
+			t.Fatal("connect JSONB serialization fixture:", err)
+		}
+		defer conn.Close(ctx)
+		if _, err := conn.Exec(ctx, "SELECT $1::jsonb", string(store.raw)); err != nil {
+			t.Fatal("migrated snapshot rejected by PostgreSQL JSONB:", err)
+		}
 	}
 }
 

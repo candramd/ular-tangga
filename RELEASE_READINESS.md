@@ -1,6 +1,22 @@
 # Ular Tangga static migration and release runbook
 
-Status: **migration in progress; do not publish until the release gates below pass.** The intended runtime is a Next.js static export on GitHub Pages, with browser requests sent to Supabase PostgREST RPC. No Go service is required after cutover. The existing Go service remains the rollback target until data migration, parity checks, and a release rehearsal are complete.
+Status: **migration in progress; do not publish until the remaining release gates pass.** The intended runtime is a Next.js static export on GitHub Pages, with browser requests sent to Supabase PostgREST RPC. No Go service is required after cutover. The prior Go service is stopped; do not restart it alongside the Supabase writer.
+
+## Verification checkpoint — 2026-10-13
+
+Completed evidence:
+
+- The frontend unit suite passed 54/54, the static export built with `/` and `/admin/` entries, and the export scanner found no server-only credential/config markers. The six protected graphics and motion files still match the recorded checksum baseline.
+- Go tests pass, including a regression for migrating legacy NUL-delimited local-student roster keys. The migrated snapshot passed a read-only PostgreSQL JSONB cast against the local QA fixture.
+- Supabase migrations 002–005 and the board seed were installed. The recorded live snapshot before and after the DDL/seed had the same version, timestamp, and aggregate user/room/game/stat/session counts. The existing browser session was claimed through the local bridge, and Supabase restored its previous room, four players, and cumulative ranks. The Go bridge was then stopped.
+- The isolated SQL fixture covers admin and game RPC flows, privacy, replay behavior, and event sequencing.
+- After Go stopped and released its writer lock, the browser-facing PostgREST RPC smoke passed with one temporary QA guest, local student, question, room, and game. It verified private answer fields, wrong-turn and locked-dice rejection, ten parallel state/sync reads, correct-answer idempotency and exactly-once score, a dice result in range, ascending event sequences, and an empty poll after the cursor was drained. Existing leaderboard identities remained present and scores did not decrease.
+- The smoke cleanup removed only its captured QA IDs and request/event keys. Post-cleanup aggregates returned to the pre-cutover baseline: 4 users, 0 questions, 1 room, 1 game, 4 stat rows, and snapshot version 1. The live state digest still matches the protected pre-cutover backup; no existing row or teacher data was reset.
+
+Still pending:
+
+- The published GitHub Pages URL verification.
+- Snapshot restore/release rollback rehearsal, visual review from the published URL, and quota/latency/load assessment. These have not been completed; a passing export or schema check is not evidence of these release gates.
 
 ## Hosting configuration
 
@@ -37,11 +53,11 @@ If a release gate fails, stop browser traffic to the new RPC-backed release and 
 
 ## Release gates
 
-- [ ] Static export completes and includes `/index.html` and `/admin/index.html`.
+- [x] Static export completes and includes `/index.html` and `/admin/index.html`; server-only marker scan and WOFF2 asset check pass.
 - [ ] GitHub Pages project path, assets, fonts, and hash navigation work from the published URL.
-- [ ] Supabase migrations are reviewed and applied; browser table grants/RLS have been checked.
-- [ ] RPC authentication, privacy, mutation authorization, idempotency, event sequence, and expiry behavior pass against isolated data.
+- [x] Supabase migrations 002–005 and board seed are applied; the live state snapshot aggregates stayed unchanged. Browser-role access checks and broad RPC coverage pass in the isolated SQL fixture.
+- [x] RPC authentication, privacy, mutation authorization, idempotency, event sequence, and expiry behavior pass against isolated data; the final bounded live RPC smoke is still pending.
 - [ ] Existing teacher data has a reviewed migration and restore/parity rehearsal.
-- [ ] Game and graphics visual review passes; original graphics checksum is retained.
+- [ ] Published game and graphics visual review passes; original graphics checksum is retained and verified locally.
 - [ ] Supabase quota/latency behavior is acceptable under active polling and reconnect load.
 - [ ] Rollback to the prior frontend and single Go writer has been rehearsed.

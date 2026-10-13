@@ -94,13 +94,18 @@ func normalizedLocalName(name string) string {
 }
 
 func localRosterKey(hostID, name string) string {
-	return hostID + "\x00" + normalizedLocalName(name)
+	// Keep persisted map keys free of NUL. PostgreSQL JSONB rejects a JSON
+	// string containing the escaped form of U+0000, so the legacy separator
+	// cannot be written back after a state migration.
+	sum := sha256.Sum256([]byte(hostID + "\x00" + normalizedLocalName(name)))
+	return "local-roster-v2:" + hex.EncodeToString(sum[:])
 }
 
 // adoptUnambiguousLegacyLocalStudents carries forward old local-player scores
 // only when the persisted local-room roster proves one host and one matching
 // synthetic ID for that host/name pair. Ambiguous historical IDs stay separate.
 func adoptUnambiguousLegacyLocalStudents(data *Data) {
+	migrateLocalStudentRosterKeys(data)
 	type roster struct{ hostID, name string }
 	candidates := map[roster]map[string]bool{}
 	owners := map[string]map[string]bool{}
@@ -138,6 +143,28 @@ func adoptUnambiguousLegacyLocalStudents(data *Data) {
 		}
 		data.LocalStudentOwners[id] = key.hostID
 		data.LocalStudentRoster[rosterKey] = id
+	}
+}
+
+// migrateLocalStudentRosterKeys converts legacy hostID-NUL-name keys to the
+// safe deterministic v2 key while preserving their existing student IDs.
+func migrateLocalStudentRosterKeys(data *Data) {
+	if data.LocalStudentOwners == nil {
+		data.LocalStudentOwners = map[string]string{}
+	}
+	for oldKey, studentID := range data.LocalStudentRoster {
+		hostID, name, ok := strings.Cut(oldKey, "\x00")
+		if !ok {
+			continue
+		}
+		newKey := localRosterKey(hostID, name)
+		if _, exists := data.LocalStudentRoster[newKey]; !exists {
+			data.LocalStudentRoster[newKey] = studentID
+		}
+		if studentID != "" && data.LocalStudentOwners[studentID] == "" {
+			data.LocalStudentOwners[studentID] = hostID
+		}
+		delete(data.LocalStudentRoster, oldKey)
 	}
 }
 
