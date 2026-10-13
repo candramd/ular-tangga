@@ -1,0 +1,15 @@
+services:
+  server:
+    build: ./server
+    ports:
+      - "8080:8080"
+    environment:
+      ADDR: ":8080"
+      DATABASE_URL: ${DATABASE_URL:?Set the server-only Supabase PostgreSQL URL}
+      ADMIN_SECRET: ${ADMIN_SECRET:?Set a strong admin secret}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?Set the exact HTTPS frontend origin}
+      COOKIE_SECURE: "true"
+      TOTAL_STEPS: ${TOTAL_STEPS:-100}
+      BOARD_JSON: ${BOARD_JSON:-}
+    volumes:
+      - ${SUPABASE_CA_CERT_PATH:?Set the verified Supabase PostgreSQL CA certificate path}:/etc/ssl/certs/supabase-ca.crt:ro

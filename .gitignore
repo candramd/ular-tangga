@@ -1,0 +1,15 @@
+node_modules/
+.next/
+.env
+.env.local
+*.tsbuildinfo
+server/data/
+coverage/
+test-results/
+
+.certs/
+out/
+.backups/
+.runtime/
+.env.test
+*.sql.tmp
