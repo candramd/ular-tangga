@@ -31,6 +31,8 @@ node scripts/static-preview.mjs out
 
 Preview tersedia di `http://127.0.0.1:4173`. Untuk menguji jalur situs proyek, set `NEXT_PUBLIC_BASE_PATH=/nama-repo` saat build. Build lokal tanpa base path memakai nilai kosong.
 
+Rehearsal pemulihan snapshot Go hanya boleh memakai snapshot privat dan PostgreSQL loopback disposable. Set `ROLLBACK_REHEARSAL_DATABASE_URL` ke database maintenance lokal, lalu jalankan `python3 scripts/rehearse-go-rollback.py /path/ke/snapshot-privat.json`. Skrip menolak host non-loopback, membuat database bernama acak, memeriksa versi/count/hash snapshot, menjalankan Go sebagai writer tunggal, menguji sesi guest setelah restart, lalu menghapus database uji. Jangan menaruh snapshot, URL berkredensial, atau output privat di Git.
+
 ## Menyiapkan Supabase
 
 Tinjau migrasi di `supabase/migrations/` dan jalankan berurutan pada proyek yang benar-benar dituju. Skrip `scripts/supabase-migrate.sh` menggunakan koneksi PostgreSQL server-side dari `.env`; `scripts/supabase-seed-board.sh` memasang konfigurasi papan awal. Siapkan dan lindungi `.env` secara lokal, jangan commit file itu atau membagikan kredensialnya.
@@ -52,4 +54,4 @@ Sinkronisasi permainan melakukan polling RPC sekitar 1,2 detik saat game berlang
 
 ## Status rilis
 
-Situs statis dan cutover Supabase RPC sudah dipublikasikan serta lulus pemeriksaan fungsional dasar; verifikasi rollback snapshot dan beban/kuota masih terbuka. Alur kelas mendukung guru sebagai pengendali yang tidak masuk daftar pemain, 2–4 pemain anak, dan perubahan nama profil tanpa mengganti identitas guest. Lihat [RELEASE_READINESS.md](RELEASE_READINESS.md) untuk bukti, batasan, dan status UX trial terbaru.
+Situs statis dan cutover Supabase RPC sudah dipublikasikan serta lulus pemeriksaan fungsional dasar. Restore snapshot lokal melalui Go dan regression leave SQL telah direhearsal pada database disposable; rollback frontend terbit dan penilaian beban/kuota masih terbuka. Alur kelas mendukung guru sebagai pengendali yang tidak masuk daftar pemain, 2–4 pemain anak, dan perubahan nama profil tanpa mengganti identitas guest. Lihat [RELEASE_READINESS.md](RELEASE_READINESS.md) untuk bukti, batasan, dan status UX trial terbaru.
