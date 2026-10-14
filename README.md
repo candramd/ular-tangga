@@ -33,6 +33,17 @@ Preview tersedia di `http://127.0.0.1:4173`. Untuk menguji jalur situs proyek, s
 
 Rehearsal pemulihan snapshot Go hanya boleh memakai snapshot privat dan PostgreSQL loopback disposable. Set `ROLLBACK_REHEARSAL_DATABASE_URL` ke database maintenance lokal, lalu jalankan `python3 scripts/rehearse-go-rollback.py /path/ke/snapshot-privat.json`. Skrip menolak host non-loopback, membuat database bernama acak, memeriksa versi/count/hash snapshot, menjalankan Go sebagai writer tunggal, menguji sesi guest setelah restart, lalu menghapus database uji. Jangan menaruh snapshot, URL berkredensial, atau output privat di Git.
 
+Untuk membandingkan migrasi writer gate secara lokal, jalankan perintah berikut pada PostgreSQL loopback disposable:
+
+```sh
+python3 scripts/rehearse_supabase_polling_load.py --through-migration 7
+python3 scripts/rehearse_supabase_polling_load.py --through-migration 8
+```
+
+Harness membuat database disposable di PostgreSQL loopback, mengisi data sintetis, menjalankan simulasi polling/reconnect/write 30 client, lalu menghapus database. Hasilnya hanya diagnostik SQL lokal, bukan uji kuota Supabase hosted. Tes pembersihan DB memerlukan `RUN_LOCAL_POLLING_DB_TESTS=1 python3 -m unittest tests.test_supabase_polling_load -v`; tanpa flag itu, tes tersebut dilewati.
+
+Untuk menguji pergantian dua artifact GitHub Pages yang sudah diunduh, jalankan `python3 scripts/rehearse-pages-artifact-rollback.py --current /path/current/artifact.tar --previous /path/previous/artifact.tar --base-path /ular-tangga`. Rehearsal mengekstrak ke direktori sementara dan hanya melayani loopback; ini tidak menerbitkan ulang situs atau mengganti backend.
+
 ## Menyiapkan Supabase
 
 Tinjau migrasi di `supabase/migrations/` dan jalankan berurutan pada proyek yang benar-benar dituju. Skrip `scripts/supabase-migrate.sh` menggunakan koneksi PostgreSQL server-side dari `.env`; `scripts/supabase-seed-board.sh` memasang konfigurasi papan awal. Siapkan dan lindungi `.env` secara lokal, jangan commit file itu atau membagikan kredensialnya.
@@ -54,4 +65,4 @@ Sinkronisasi permainan melakukan polling RPC sekitar 1,2 detik saat game berlang
 
 ## Status rilis
 
-Situs statis dan cutover Supabase RPC sudah dipublikasikan serta lulus pemeriksaan fungsional dasar. Restore snapshot lokal melalui Go dan regression leave SQL telah direhearsal pada database disposable; rollback frontend terbit dan penilaian beban/kuota masih terbuka. Alur kelas mendukung guru sebagai pengendali yang tidak masuk daftar pemain, 2–4 pemain anak, dan perubahan nama profil tanpa mengganti identitas guest. Lihat [RELEASE_READINESS.md](RELEASE_READINESS.md) untuk bukti, batasan, dan status UX trial terbaru.
+Situs statis dan cutover Supabase RPC sudah dipublikasikan serta lulus pemeriksaan fungsional dasar. Migrasi 008 menghilangkan kegagalan lock pada beban SQL sintetis lokal; simulasi restore antar-artifact Pages juga lulus di loopback. Penilaian kuota/latensi hosted Supabase dan rollback produksi dari RPC ke writer Go tetap terbuka. Alur kelas mendukung guru sebagai pengendali yang tidak masuk daftar pemain, 2–4 pemain anak, dan perubahan nama profil tanpa mengganti identitas guest. Lihat [RELEASE_READINESS.md](RELEASE_READINESS.md) untuk bukti dan batasan.
