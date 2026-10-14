@@ -3,7 +3,10 @@
 import dynamic from "next/dynamic";
 import { Component, useCallback, useEffect, useRef, useState, useId, type ReactNode, type FormEvent } from "react";
 import { ArrowRight, ArrowUpRight, BookOpen, Check, ChevronRight, CircleHelp, Compass, Copy, Crown, Dice5, Flag, Leaf, LockKeyhole, LogOut, Maximize2, Minimize2, Mountain, Plus, RotateCcw, Settings2, ShieldCheck, Smartphone, Sparkles, Timer, Trophy, Users, Wifi, WifiOff, X, Zap } from "lucide-react";
-import { api, ApiError, claimLocalMigrationSession, requestId } from "@/services/api";
+import { api, ApiError, claimLocalMigrationSession, clearSessionTokens, getSessionToken, requestId } from "@/services/api";
+import { createTeacherGameSession } from "@/services/admin";
+import { clearTeacherActorId, getTeacherActorId, getTeacherSession, setTeacherActorId, signOutTeacher, supabaseAuth } from "@/services/supabase-auth";
+import { shouldReconcileAuthIdentity } from "@/services/auth-transition";
 import { rankRoster } from "@/services/rank-roster";
 import { readStoredSetting, resolveQuality, resolveReducedMotion } from "@/services/settings";
 import { DICE_RELEASE_MS, DICE_ROLL_DURATION_MS } from "@/game/dice-motion";
@@ -56,6 +59,7 @@ function Modal({ title, children, onClose, restoreFocus = true }: { title: strin
     initialFocus?.focus({ preventScroll: true });
     return () => { if (dialog?.open) dialog.close(); };
   }, []);
+
   const closeFromDialog = () => {
     onClose();
     if (restoreFocus) requestAnimationFrame(() => {
@@ -67,6 +71,7 @@ function Modal({ title, children, onClose, restoreFocus = true }: { title: strin
 
 export default function AdventureApp({ initialCode, initialGameId }: { initialCode?: string; initialGameId?: string }) {
   const { user, room, game, result, resultTurnNumber, diceRoll, connection, setUser, setRoom, setGame, setResult, resetGameplay } = useGameStore();
+  const teacherOwnerRef = useRef<string | null>(user?.teacherRole === "teacher" ? user.id : null);
   const [fullscreen, setFullscreen] = useState(false);
   const shellRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -181,9 +186,36 @@ export default function AdventureApp({ initialCode, initialGameId }: { initialCo
     let cancelled = false;
     async function restore() {
       try {
+        const teacherAuth = await getTeacherSession();
+        if (cancelled) return;
+        if (teacherAuth) {
+          const actorChanged = (teacherOwnerRef.current !== null && teacherOwnerRef.current !== teacherAuth.user.id)
+            || (!!getTeacherActorId() && getTeacherActorId() !== teacherAuth.user.id);
+          if (actorChanged) {
+            clearSessionTokens(); clearTeacherActorId(); sessionStorage.removeItem("adventure-room");
+            resetGameplay(); setUser(null); setResumeRoom(null);
+          }
+          let matchedSession = false;
+          if (!actorChanged && getSessionToken()) {
+            try {
+              const existing = await api<User>("/auth/me");
+              if (existing.id === teacherAuth.user.id) { matchedSession = true; teacherOwnerRef.current = teacherAuth.user.id; setUser(existing); setTeacherActorId(teacherAuth.user.id); }
+              else { clearSessionTokens(); sessionStorage.removeItem("adventure-room"); resetGameplay(); setUser(null); }
+            } catch (error) {
+              if (error instanceof ApiError && error.status === 401) { clearSessionTokens(); sessionStorage.removeItem("adventure-room"); resetGameplay(); setUser(null); }
+              else throw error;
+            }
+          }
+          if (!matchedSession) {
+            const teacher = await createTeacherGameSession();
+            if (cancelled) return;
+            teacherOwnerRef.current = teacherAuth.user.id;
+            setTeacherActorId(teacherAuth.user.id); setUser(teacher);
+          }
+        }
         // This only checks the old HTTP-only cookie on an explicitly configured
         // local preview. The returned opaque token is then validated by Supabase.
-        await claimLocalMigrationSession();
+        if (!teacherAuth) await claimLocalMigrationSession();
         if (cancelled) return;
         const me = await api<User>("/auth/me");
         if (cancelled) return;
@@ -240,6 +272,26 @@ export default function AdventureApp({ initialCode, initialGameId }: { initialCo
   }, []);
 
   useEffect(() => {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) return;
+    const { data } = supabaseAuth().auth.onAuthStateChange((event, session) => {
+      const nextId = session?.user.id ?? null;
+      const currentUser = useGameStore.getState().user;
+      if (shouldReconcileAuthIdentity({
+        currentOwnerId: teacherOwnerRef.current,
+        nextOwnerId: nextId,
+        event,
+        hasGuestIdentity: !!currentUser && currentUser.teacherRole !== "teacher",
+      })) {
+        teacherOwnerRef.current = nextId;
+        clearSessionTokens(); clearTeacherActorId(); sessionStorage.removeItem("adventure-room");
+        resetGameplay(); setUser(null); setResumeRoom(null);
+        if (nextId) window.setTimeout(() => window.location.reload(), 0);
+      }
+    });
+    return () => data.subscription.unsubscribe();
+  }, [resetGameplay, setUser]);
+
+  useEffect(() => {
     if (homeMode || !room?.id || !user) return;
     return connectGame(room.id, room.gameId);
   }, [room?.id, room?.gameId, user?.id, homeMode]);
@@ -290,10 +342,9 @@ export default function AdventureApp({ initialCode, initialGameId }: { initialCo
 
   async function startIntent(action: "create" | "quick" | "join" | "local") {
     if (room || resumeRoom) { setError("Selesaikan atau lanjutkan ruang yang sudah ada sebelum memulai permainan baru."); return; }
-    if (action === "local") { setLocalNames(["", ""]); setError(""); setModal("local"); return; }
+    if (action === "join") { if (!user) { setIntent(action); setModal("login"); } else setModal("join"); return; }
     if (!user) { setIntent(action); setModal("login"); return; }
-    if (action === "join") { setModal("join"); return; }
-    if (user.classroomHost) { setIntent(action); setUsername(""); setModal("login"); return; }
+    if (action === "local") { setLocalNames(["", ""]); setError(""); setModal("local"); return; }
     await perform(async () => {
       const next = await api<Room>(action === "quick" ? "/rooms/quick" : "/rooms", { isPublic });
       acceptRoom(next); setGame(null); setResult(null);
@@ -397,17 +448,23 @@ export default function AdventureApp({ initialCode, initialGameId }: { initialCo
 
   async function exitSession() {
     await perform(async () => {
+      let remoteFailure = false;
       let memberRoom = room || resumeRoom;
-      if (!memberRoom) memberRoom = await api<Room | null>("/rooms/current");
+      if (!memberRoom) { try { memberRoom = await api<Room | null>("/rooms/current"); } catch { remoteFailure = true; } }
       if (memberRoom) {
-        await api(`/rooms/${memberRoom.id}/leave`, {});
-        resetGameplay(); setResumeRoom(null); sessionStorage.removeItem("adventure-room");
+        try { await api(`/rooms/${memberRoom.id}/leave`, {}); } catch { remoteFailure = true; }
       }
-      await api("/auth/logout", {});
+      if (user?.teacherRole) {
+        try { await api("/teacher/session/logout", {}); } catch { remoteFailure = true; }
+        try { await signOutTeacher(); } catch { remoteFailure = true; }
+      } else { try { await api("/auth/logout", {}); } catch { remoteFailure = true; } }
+      clearSessionTokens();
+      clearTeacherActorId();
       setUser(null); resetGameplay(); setResumeRoom(null); sessionStorage.removeItem("adventure-room");
       setSelected(null); setError(""); setNotice(""); setIntent(null); setRouteCode(""); setRouteGameId("");
       setHomeMode(true); setModal(null);
       window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#/home`);
+      if (remoteFailure) setError("Sesi lokal sudah keluar, tetapi koneksi server gagal menyimpan sebagian perubahan.");
     });
   }
 
@@ -437,13 +494,13 @@ export default function AdventureApp({ initialCode, initialGameId }: { initialCo
     <aside className="sidebar">
       <a className="brand" href="#/home" onClick={(e) => { e.preventDefault(); goHome(); }} aria-label="Ular Tangga Adventure, beranda"><span className="brand-symbol"><Dice5 size={29} strokeWidth={2.4} /><Leaf className="brand-leaf" size={17} /></span><span>ular tangga<span className="brand-sub">ADVENTURE</span></span></a>
       <div className="nav-caption">RUANG KELAS</div>
-      <nav aria-label="Navigasi utama">{navItems.map(({ id, name, icon: Icon }) => <button key={id} onClick={() => void openTab(id)} className={`nav-item ${tab === id ? "active" : ""}`} aria-current={tab === id ? "page" : undefined} aria-label={name}><Icon size={20} /><span>{name}</span>{tab === id && <span className="active-dot" />}</button>)}<button onClick={() => setModal("settings")} className="nav-item nav-icon-only" aria-label="Pengaturan"><Settings2 size={20} /><span>Pengaturan</span></button><button onClick={() => setModal("help")} className="nav-item nav-icon-only" aria-label="Panduan bermain"><CircleHelp size={20} /><span>Panduan bermain</span></button><a href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/admin/`} className="nav-item nav-icon-only" aria-label="Kelola bank soal"><ShieldCheck size={20} /><span>Kelola bank soal</span></a></nav>
+      <nav aria-label="Navigasi utama">{navItems.map(({ id, name, icon: Icon }) => <button key={id} onClick={() => void openTab(id)} className={`nav-item ${tab === id ? "active" : ""}`} aria-current={tab === id ? "page" : undefined} aria-label={name}><Icon size={20} /><span>{name}</span>{tab === id && <span className="active-dot" />}</button>)}<button onClick={() => setModal("settings")} className="nav-item nav-icon-only" aria-label="Pengaturan"><Settings2 size={20} /><span>Pengaturan</span></button><button onClick={() => setModal("help")} className="nav-item nav-icon-only" aria-label="Panduan bermain"><CircleHelp size={20} /><span>Panduan bermain</span></button><a href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/guru/`} className="nav-item nav-icon-only" aria-label="Kelola bank soal"><ShieldCheck size={20} /><span>Panel guru</span></a></nav>
       <div className="field-note"><span className="note-icon"><BookOpen size={23} /></span><h3>Satu papan,<br />banyak pelajaran.</h3><p>Guru memandu kelas. Anak belajar sambil bermain.</p><button onClick={() => setModal("help")}>Lihat panduan <ArrowRight size={15} /></button><span className="note-leaf"><Leaf size={63} /></span></div>
       <div className="sidebar-bottom"><div className="sidebar-footer"><span className="status-dot" /> Belajar. Bermain. Bertualang.</div></div>
     </aside>
 
     <div className="workspace">
-      <header className="topbar"><div className="breadcrumb"><span>Ruang kelas</span><ChevronRight size={14} /><strong>{homeMode ? "Beranda" : navItems.find((n) => n.id === tab)?.name}</strong></div><div className="topbar-player"><button className="home-button" onClick={goHome} aria-label="Beranda"><Compass size={16} /><span>Beranda</span></button><button className="fullscreen-button" onClick={() => void toggleFullscreen()} aria-label={fullscreen ? "Keluar layar penuh" : "Layar penuh"}><Maximize2 size={17} /><span>{fullscreen ? "Perkecil" : "Layar penuh"}</span></button>{user && <button className="session-control" onClick={() => { setUsername(user.username); setModal("identity"); }} aria-label={`Sesi ${user.username}; atur nama atau keluar sesi`}><BookOpen size={16} /><span>{user.classroomHost ? "Sesi perangkat" : user.username}</span><ChevronRight size={14} /></button>}</div></header>
+      <header className="topbar"><div className="breadcrumb"><span>Ruang kelas</span><ChevronRight size={14} /><strong>{homeMode ? "Beranda" : navItems.find((n) => n.id === tab)?.name}</strong></div><div className="topbar-player"><a className="home-button" href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/guru/`} aria-label="Panel guru"><ShieldCheck size={16} /><span>Panel guru</span></a><button className="home-button" onClick={goHome} aria-label="Beranda"><Compass size={16} /><span>Beranda</span></button><button className="fullscreen-button" onClick={() => void toggleFullscreen()} aria-label={fullscreen ? "Keluar layar penuh" : "Layar penuh"}><Maximize2 size={17} /><span>{fullscreen ? "Perkecil" : "Layar penuh"}</span></button>{user && <button className="session-control" onClick={() => { setUsername(user.username); setModal("identity"); }} aria-label={`Sesi ${user.username}; atur nama atau keluar sesi`}><BookOpen size={16} /><span>{user.classroomHost ? "Sesi perangkat" : user.username}</span><ChevronRight size={14} /></button>}</div></header>
       <main>
         <div className="page-heading"><div><div className="eyebrow"><span /> MEDIA BELAJAR INTERAKTIF</div><h1>{tab === "adventure" ? "Papan belajar siap dimainkan" : navItems.find((n) => n.id === tab)?.name}</h1><p>{tab === "adventure" ? "Pilih nama pemain, lalu pandu giliran belajar bersama di papan." : "Siapkan permainan belajar untuk kelasmu."}</p></div><button className="guide-button" onClick={() => setModal("help")}><BookOpen size={17} /> Panduan guru <ArrowUpRight size={15} /></button></div>
         {error && <div className="alert error" role="alert"><CircleHelp size={18} /><span>{error}</span><button aria-label="Tutup pesan kesalahan" onClick={() => setError("")}><X size={16} /></button></div>}

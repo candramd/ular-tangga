@@ -710,8 +710,8 @@
 .admin-login-form .admin-input {
   min-height: 48px;
   font-size: 16px;
-  letter-spacing: 1px;
-  text-align: center;
+  letter-spacing: normal;
+  text-align: left;
 }
 
 .admin-login-description {

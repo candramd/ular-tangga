@@ -1,12 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { Check, CircleHelp, Dice5, FileEdit, Home, Leaf, LoaderCircle, LockKeyhole, LogOut, Plus, Save, Search, ShieldCheck, Trash2, TriangleAlert, X } from "lucide-react";
-import { AdminApiError, createQuestion, createSession, deleteQuestion, getQuestions, getSession, logoutSession, updateQuestion, type AdminQuestion } from "@/services/admin";
+import { Check, CircleHelp, Dice5, FileEdit, Home, Leaf, LoaderCircle, LogOut, Plus, Save, Search, ShieldCheck, Trash2, TriangleAlert, X } from "lucide-react";
+import { AdminApiError, createQuestion, createTeacherGameSession, deleteQuestion, getQuestions, logoutTeacherGameSession, updateQuestion, type AdminQuestion } from "@/services/admin";
+import { clearTeacherActorId, getTeacherSession, setTeacherActorId, signInTeacherWithUsername, signOutTeacher, signUpTeacherWithUsername, supabaseAuth } from "@/services/supabase-auth";
+import { shouldReconcileAuthIdentity } from "@/services/auth-transition";
+import { clearSessionTokens } from "@/services/api";
+import { useGameStore } from "@/stores/game.store";
 
 const homeHref = `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/`;
 
 type Status = "loading" | "logged-out" | "ready";
+type AuthMode = "login" | "signup";
 type Difficulty = AdminQuestion["difficulty"];
 type StatusFilter = "semua" | "aktif" | "nonaktif";
 type ModalState = { mode: "create" } | { mode: "edit"; id: string } | null;
@@ -57,7 +62,6 @@ export default function AdminApp() {
   const [status, setStatus] = useState<Status>("loading");
   const [questions, setQuestions] = useState<AdminQuestion[]>([]);
   const [persistenceEnabled, setPersistenceEnabled] = useState(true);
-  const [secret, setSecret] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -70,13 +74,19 @@ export default function AdminApp() {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [authUsername, setAuthUsername] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authPasswordConfirm, setAuthPasswordConfirm] = useState("");
+  const [authNotice, setAuthNotice] = useState("");
   const dialogRef = useRef<HTMLDialogElement>(null);
   const confirmRef = useRef<HTMLDialogElement>(null);
+  const teacherOwnerRef = useRef<string | null>(null);
 
   const handleError = useCallback((e: unknown) => {
     if (e instanceof AdminApiError && e.status === 404) {
       setStatus("logged-out");
-      setError("Panel admin sedang dinonaktifkan. Kunci aksesnya belum disiapkan pada server.");
+      setError("Panel guru belum tersedia. Silakan coba lagi nanti.");
       return;
     }
     setError(e instanceof Error ? e.message : "Terjadi kesalahan. Coba lagi.");
@@ -102,9 +112,13 @@ export default function AdminApp() {
     let cancelled = false;
     async function restore() {
       try {
-        const session = await getSession();
+        const authSession = await getTeacherSession();
+        if (!authSession) { if (!cancelled) setStatus("logged-out"); return; }
+        const teacher = await createTeacherGameSession();
+        teacherOwnerRef.current = teacher.id;
+        setTeacherActorId(teacher.id);
         if (cancelled) return;
-        setPersistenceEnabled(session.persistenceEnabled !== false);
+        setPersistenceEnabled(true);
         const bank = await getQuestions();
         if (cancelled) return;
         setQuestions(bank.questions);
@@ -124,22 +138,39 @@ export default function AdminApp() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) return;
+    const { data } = supabaseAuth().auth.onAuthStateChange((event, session) => {
+      const nextId = session?.user.id ?? null;
+      if (shouldReconcileAuthIdentity({ currentOwnerId: teacherOwnerRef.current, nextOwnerId: nextId, event })) {
+        teacherOwnerRef.current = nextId;
+        clearSessionTokens(); clearTeacherActorId(); sessionStorage.removeItem("adventure-room");
+        useGameStore.getState().resetGameplay(); setQuestions([]); setStatus("logged-out");
+        if (nextId) window.setTimeout(() => window.location.reload(), 0);
+      }
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
+
   async function login(e: FormEvent) {
     e.preventDefault();
     if (busy) return;
     setBusy(true);
     setError("");
+    setAuthNotice("");
     try {
-      await createSession(secret);
-      const bank = await getQuestions();
-      setQuestions(bank.questions);
-      const session = await getSession();
-      setPersistenceEnabled(session.persistenceEnabled !== false);
-      setStatus("ready");
+      if (authMode === "signup") {
+        if (authPassword !== authPasswordConfirm) throw new Error("Konfirmasi kata sandi belum cocok.");
+        if (authPassword.length < 8) throw new Error("Kata sandi harus berisi minimal 8 karakter.");
+        await signUpTeacherWithUsername(authUsername, authPassword);
+        setAuthPassword(""); setAuthPasswordConfirm("");
+        setAuthNotice("Akun guru berhasil dibuat. Menyiapkan panel...");
+      } else {
+        await signInTeacherWithUsername(authUsername, authPassword);
+      }
     } catch (e) {
       handleError(e);
     } finally {
-      setSecret("");
       setBusy(false);
     }
   }
@@ -148,16 +179,13 @@ export default function AdminApp() {
     if (busy) return;
     setBusy(true);
     setError("");
-    try {
-      await logoutSession();
-      setQuestions([]);
-      setSecret("");
-      setStatus("logged-out");
-    } catch (e) {
-      handleError(e);
-    } finally {
-      setBusy(false);
-    }
+    let remoteFailure = false;
+    try { await logoutTeacherGameSession(); } catch { remoteFailure = true; }
+    try { await signOutTeacher(); } catch { remoteFailure = true; }
+    clearSessionTokens(); clearTeacherActorId(); sessionStorage.removeItem("adventure-room");
+    useGameStore.getState().resetGameplay(); setQuestions([]); setStatus("logged-out");
+    if (remoteFailure) setError("Anda sudah keluar di perangkat ini. Server belum dapat menyimpan sebagian perubahan.");
+    setBusy(false);
   }
 
   function openCreate() {
@@ -237,7 +265,7 @@ export default function AdminApp() {
         setModal(null);
         setQuestions([]);
         setStatus("logged-out");
-        setError("Sesi admin berakhir. Masuk kembali untuk melanjutkan.");
+        setError("Sesi guru berakhir. Masuk kembali untuk melanjutkan.");
         return;
       }
       setFormError(err instanceof AdminApiError ? err.message : "Gagal menyimpan soal. Coba lagi.");
@@ -272,7 +300,7 @@ export default function AdminApp() {
         setConfirmId(null);
         setQuestions([]);
         setStatus("logged-out");
-        setError("Sesi admin berakhir. Masuk kembali untuk melanjutkan.");
+        setError("Sesi guru berakhir. Masuk kembali untuk melanjutkan.");
         return;
       }
       if (err instanceof AdminApiError && err.status === 404) {
@@ -297,32 +325,25 @@ export default function AdminApp() {
   });
 
   if (status === "loading") {
-    return <div className="admin-shell"><div className="admin-workspace"><div className="scene-loading"><LoaderCircle size={34} /><span>Memeriksa sesi admin...</span></div></div></div>;
+    return <div className="admin-shell"><div className="admin-workspace"><div className="scene-loading"><LoaderCircle size={34} /><span>Memeriksa sesi guru...</span></div></div></div>;
   }
 
   if (status === "logged-out") {
     return <div className="admin-shell"><div className="admin-workspace"><main className="admin-main">
-      <div className="page-heading"><div><div className="admin-eyebrow"><span /> AREA TERBATAS</div><h1>Masuk panel admin</h1><p className="admin-login-description">Panel ini untuk pengelola bank soal. Masukkan kunci rahasia admin untuk melanjutkan.</p></div></div>
+      <div className="page-heading"><div><div className="admin-eyebrow"><span /> AREA PENGAJAR</div><h1>{authMode === "signup" ? "Daftar akun guru" : "Masuk panel pengajar"}</h1><p className="admin-login-description">Gunakan nama pengguna dan kata sandi untuk mengelola bank soal pribadi.</p></div></div>
       {error && <div className="admin-alert error" role="alert"><TriangleAlert size={18} /><span>{error}</span><button aria-label="Tutup pesan kesalahan" onClick={() => setError("")}><X size={16} /></button></div>}
+      {authNotice && <div className="admin-alert" role="status"><ShieldCheck size={18} /><span>{authNotice}</span></div>}
       <div className="admin-modal">
-        <div className="admin-modal-head"><h2>Kunci rahasia</h2><a className="admin-help-link" href={homeHref}><Home size={14} />Beranda</a></div>
+        <div className="admin-modal-head"><h2>Akun pengajar</h2><a className="admin-help-link" href={homeHref}><Home size={14} />Beranda</a></div>
         <form className="admin-login-form" onSubmit={(e) => void login(e)}>
-          <label className="admin-field-label" htmlFor="admin-secret">Secret admin</label>
-          <input
-            id="admin-secret"
-            className="admin-input"
-            type="password"
-            autoFocus
-            required
-            placeholder="••••••••"
-            value={secret}
-            onChange={(e) => setSecret(e.target.value)}
-            autoComplete="off"
-          />
-          <button className="admin-button primary full" disabled={busy || !secret.trim()}>
-            {busy ? <><LoaderCircle size={17} />Memeriksa...</> : <><LockKeyhole size={17} />Masuk</>}
+          <div className="admin-form-field"><label className="admin-field-label" htmlFor="teacher-username">Nama pengguna</label><input id="teacher-username" className="admin-input" type="text" autoComplete="username" minLength={3} maxLength={24} value={authUsername} onChange={(e) => setAuthUsername(e.target.value)} required /></div>
+          <div className="admin-form-field"><label className="admin-field-label" htmlFor="teacher-password">Kata sandi</label><input id="teacher-password" className="admin-input" type="password" autoComplete={authMode === "signup" ? "new-password" : "current-password"} minLength={authMode === "signup" ? 8 : undefined} value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} required /></div>
+          {authMode === "signup" && <div className="admin-form-field"><label className="admin-field-label" htmlFor="teacher-password-confirm">Ulangi kata sandi</label><input id="teacher-password-confirm" className="admin-input" type="password" autoComplete="new-password" minLength={8} value={authPasswordConfirm} onChange={(e) => setAuthPasswordConfirm(e.target.value)} required /></div>}
+          <button className="admin-button primary full" disabled={busy}>
+            {busy ? <><LoaderCircle size={17} />Memproses...</> : authMode === "signup" ? "Buat akun guru" : "Masuk"}
           </button>
-          <p className="admin-login-note"><ShieldCheck size={15} />Kunci tidak pernah disimpan di perangkat ini dan hanya dipakai sekali untuk masuk.</p>
+          <button className="admin-help-link" type="button" onClick={() => { setAuthMode(authMode === "signup" ? "login" : "signup"); setError(""); setAuthNotice(""); }}> {authMode === "signup" ? "Sudah punya akun? Masuk" : "Belum punya akun? Daftar sebagai guru"}</button>
+          <p className="admin-login-note"><ShieldCheck size={15} />Nama pengguna tidak dapat diubah dan tidak memakai email. Setiap pengajar memiliki bank soal dan ruang kelas sendiri.</p>
           <a className="admin-help-link" href={homeHref}><Home size={14} />Kembali ke beranda</a>
         </form>
       </div>
@@ -331,16 +352,16 @@ export default function AdminApp() {
 
   return <div className="admin-shell">
     <aside className="admin-sidebar">
-      <a className="admin-brand" href={homeHref} aria-label="Ular Tangga Adventure beranda"><span className="admin-brand-symbol"><Dice5 size={29} strokeWidth={2.4} /><Leaf className="admin-brand-leaf" size={17} /></span><span>ular tangga<span className="admin-brand-sub">ADMIN</span></span></a>
-      <div className="admin-nav-caption">PANEL PENGELOLA</div>
-      <nav className="admin-nav" aria-label="Navigasi admin">
+      <a className="admin-brand" href={homeHref} aria-label="Ular Tangga Adventure beranda"><span className="admin-brand-symbol"><Dice5 size={29} strokeWidth={2.4} /><Leaf className="admin-brand-leaf" size={17} /></span><span>ular tangga<span className="admin-brand-sub">GURU</span></span></a>
+      <div className="admin-nav-caption">PANEL PENGAJAR</div>
+      <nav className="admin-nav" aria-label="Navigasi guru">
         <span className="admin-nav-item active" aria-current="page"><FileEdit size={19} /><span>Bank soal</span></span>
       </nav>
       <div className="admin-sidebar-bottom"><a className="admin-nav-item" href={homeHref} aria-label="Kembali ke beranda"><Home size={19} /><span>Beranda</span></a></div>
     </aside>
     <div className="admin-workspace">
       <header className="admin-topbar">
-        <div className="admin-breadcrumb"><span>Panel admin</span><strong>Bank soal</strong></div>
+        <div className="admin-breadcrumb"><span>Panel guru</span><strong>Bank soal</strong></div>
         <div className="admin-topbar-actions">
           <button className="admin-button secondary small" disabled={busy} onClick={() => void logout()}><LogOut size={15} />Keluar</button>
         </div>

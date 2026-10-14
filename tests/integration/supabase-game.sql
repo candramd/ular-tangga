@@ -1,36 +1,18 @@
 \set ON_ERROR_STOP on
 BEGIN;
 
--- All writes are synthetic and rolled back. This runs against an isolated fixture DB.
-INSERT INTO public.ular_admin_config(singleton,secret_hash)
-VALUES(true,extensions.crypt('fixture-only-admin-secret',extensions.gen_salt('bf')))
-ON CONFLICT(singleton) DO UPDATE SET secret_hash=excluded.secret_hash,login_attempts=0,locked_until=NULL;
+-- All writes are synthetic and rolled back. Legacy snapshot questions remain
+-- playable in the shared guest pool after migration 009 retires admin login.
+UPDATE public.ular_server_state SET state=jsonb_set(state,'{questions}','{"legacy-fixture-question":{"id":"legacy-fixture-question","question":"Isolated fixture question?","options":["Correct","Wrong"],"answer":0,"explanation":"fixture only","category":"QA","difficulty":"mudah","timeLimit":30,"active":true}}'::jsonb,true) WHERE id=1;
 
 SET LOCAL ROLE anon;
 DO $$
 DECLARE
-  v_admin jsonb; v_admin_token text; v_created jsonb; v_question_id text;
   v_guest jsonb; v_token text; v_user_id text; v_room jsonb; v_room_id text;
   v_game jsonb; v_game_id text; v_question text; v_student text;
   v_result jsonb; v_replay jsonb; v_conflict jsonb; v_state jsonb; v_sync jsonb; v_leaderboard jsonb;
   v_dice jsonb; v_events jsonb; v_sequence bigint; v_count integer;
-  v_payload jsonb := '{"question":"Isolated fixture question?","options":["Correct","Wrong"],"answer":0,"explanation":"fixture only","category":"QA","difficulty":"mudah","timeLimit":30,"active":true}'::jsonb;
 BEGIN
-  v_admin:=public.ular_api('/admin/session','POST','{"secret":"fixture-only-admin-secret"}'::jsonb,NULL,NULL,'fixture-admin-login-0001');
-  IF v_admin->>'ok'<>'true' THEN RAISE EXCEPTION 'admin login failed: %',v_admin->'error'->>'code'; END IF;
-  v_admin_token:=v_admin->'meta'->>'adminToken';
-  IF length(v_admin_token)<32 THEN RAISE EXCEPTION 'admin bearer token missing'; END IF;
-
-  v_created:=public.ular_api('/admin/questions','POST',v_payload,NULL,v_admin_token,'fixture-question-create-0001');
-  IF v_created->>'ok'<>'true' THEN RAISE EXCEPTION 'admin question create failed: %',v_created->'error'->>'code'; END IF;
-  v_question_id:=v_created->'data'->>'id';
-  v_replay:=public.ular_api('/admin/questions','POST',v_payload,NULL,v_admin_token,'fixture-question-create-0001');
-  IF v_replay->'data'->>'id' IS DISTINCT FROM v_question_id THEN RAISE EXCEPTION 'admin retry created a different question'; END IF;
-  v_conflict:=public.ular_api('/admin/questions','POST',v_payload||'{"question":"different payload"}'::jsonb,NULL,v_admin_token,'fixture-question-create-0001');
-  IF v_conflict->>'ok'<>'false' OR (v_conflict->>'status')::integer<>409 THEN RAISE EXCEPTION 'admin request id payload conflict was not rejected'; END IF;
-  v_created:=public.ular_api('/admin/questions','GET','{}'::jsonb,NULL,v_admin_token,'fixture-admin-list-0001');
-  IF NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v_created->'data'->'questions') q WHERE q->>'id'=v_question_id AND q->>'answer'='0') THEN RAISE EXCEPTION 'admin list missing answer-bearing fixture question'; END IF;
-
   v_guest:=public.ular_api('/auth/guest','POST','{"username":"QA Host"}'::jsonb,NULL,NULL,'fixture-host-session-0001');
   IF v_guest->>'ok'<>'true' THEN RAISE EXCEPTION 'guest session creation failed'; END IF;
   v_token:=v_guest->'meta'->>'sessionToken';v_user_id:=v_guest->'data'->>'id';
@@ -84,9 +66,5 @@ BEGIN
   v_leaderboard:=public.ular_api('/leaderboard','GET','{}'::jsonb,v_token,NULL,NULL)->'data';
   IF NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v_leaderboard) p WHERE p->>'id'=v_student AND (p->>'correctAnswers')::integer=1) THEN RAISE EXCEPTION 'local student score did not accumulate exactly once'; END IF;
 
-  v_result:=public.ular_api('/admin/session/logout','POST','{}'::jsonb,NULL,v_admin_token,'fixture-admin-logout-0001');
-  IF v_result->>'ok'<>'true' THEN RAISE EXCEPTION 'admin logout failed'; END IF;
-  v_result:=public.ular_api('/admin/questions','GET','{}'::jsonb,NULL,v_admin_token,NULL);
-  IF v_result->>'ok'<>'false' OR (v_result->>'status')::integer<>401 THEN RAISE EXCEPTION 'admin logout did not revoke token'; END IF;
 END $$;
 ROLLBACK;

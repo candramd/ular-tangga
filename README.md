@@ -48,7 +48,19 @@ Untuk menguji pergantian dua artifact GitHub Pages yang sudah diunduh, jalankan 
 
 Tinjau migrasi di `supabase/migrations/` dan jalankan berurutan pada proyek yang benar-benar dituju. Skrip `scripts/supabase-migrate.sh` menggunakan koneksi PostgreSQL server-side dari `.env`; `scripts/supabase-seed-board.sh` memasang konfigurasi papan awal. Siapkan dan lindungi `.env` secara lokal, jangan commit file itu atau membagikan kredensialnya.
 
-Admin memakai rahasia server yang disimpan sebagai hash privat di database. Provisioning rahasia yang sudah disiapkan dapat dilakukan dengan `python3 scripts/provision-admin-secret.py --from-env`; mode ini memakai `ADMIN_SECRET` yang sudah ada di `.env` dan tidak menggantinya. Jangan menaruh rahasia tersebut di frontend atau di GitHub Pages settings sebagai `NEXT_PUBLIC_*`.
+Panel guru (`/guru/`) memakai nama pengguna dan kata sandi Supabase Auth. Nama pengguna 3–24 karakter ASCII (`a–z`, angka, titik, `_`, `-`), harus diawali dan diakhiri huruf/angka, tidak boleh berisi titik berurutan, tidak peka huruf besar/kecil, dan nama sistem seperti `admin` atau `guru` dicadangkan. Frontend mengubah nama itu menjadi alamat internal di domain `.invalid`; alamat ini tidak dapat menerima email dan tidak ditampilkan. Aktifkan password signup dan matikan Confirm email di Supabase Auth agar pendaftaran langsung mendapat sesi. Tidak ada verifikasi atau pemulihan lewat email. `/admin/` tetap menjadi alias halaman guru lama.
+
+Migration 009 (`009_username_teachers.sql`) menambahkan tabel role guru, bank privat tiap guru, dan proyeksi soal aktif untuk permainan bersama. Uji migration pada database disposable terlebih dahulu. Akun Supabase Auth mendapat role `teacher` dari database; role yang diizinkan hanya `teacher` dan `student`. Tidak ada login admin atau bootstrap admin. Guest yang bermain tanpa login tetap dapat membuat atau bergabung ke ruang publik dan memakai soal aktif dari semua guru; ruang yang dibuat guru hanya memakai bank soal guru tersebut. Jawaban benar tidak disertakan dalam proyeksi publik.
+
+```sql
+INSERT INTO public.ular_teacher_roles(user_id, role, active)
+VALUES ('<UUID dari auth.users>', 'student', true)
+ON CONFLICT (user_id) DO UPDATE SET role = 'student', active = true;
+```
+
+Gunakan perubahan role tepercaya ini hanya bila akun harus diturunkan menjadi siswa, dan `active = false` untuk menonaktifkan akun. Jangan hapus baris role: akun yang kembali memperoleh role guru default kecuali barisnya disimpan dengan role/active yang lebih restriktif. Role browser, request body, dan `user_metadata` tidak pernah memberi kewenangan. Route admin dan bearer admin lama ditolak oleh dispatcher hosted setelah migration 009. Soal aktif lama yang tersimpan di snapshot global tidak diklaim oleh guru pertama; soal itu tetap tersedia pada pool bersama untuk ruang guest. Pemindahan soal lama ke guru tertentu hanya boleh dilakukan melalui skrip SQL tepercaya setelah pemiliknya dipastikan.
+
+Pengikatan sesi guru serta bank soal relasional hanya tersedia saat frontend memakai Supabase RPC. Server Go lama adalah rollback kompatibilitas untuk data/fitur sebelumnya; server itu belum menerapkan otorisasi username/password dan model bank soal multi-guru, sehingga jangan mengarahkannya ke aplikasi guru baru. Konfigurasikan Supabase Auth untuk password signup tanpa konfirmasi email dan jalankan migration 009 sebelum rilis frontend baru. Karena tidak ada email reset, sediakan prosedur pemulihan akun tepercaya sebelum penggunaan luas.
 
 ## GitHub Pages
 
@@ -61,7 +73,7 @@ Workflow menetapkan base path ke nama repository, sesuai URL situs proyek `akun.
 
 Sinkronisasi permainan melakukan polling RPC sekitar 1,2 detik saat game berlangsung dan 2 detik saat menunggu di ruang; saat koneksi gagal interval bertambah sebelum mencoba lagi. Setiap pemain aktif menambah pemakaian RPC dan transfer data. Batas dan biaya bergantung pada paket serta penggunaan proyek Supabase; jangan menganggap kuota gratis cukup tanpa memeriksa pemakaian dan menguji beban yang direncanakan.
 
-**Catatan sesi dan peringkat:** sesi guest tersimpan sebagai token opaque di penyimpanan browser dan berlaku 30 hari. Gunakan origin, profil browser, dan akun pengajar yang sama untuk melanjutkan identitas. Beralih dari `localhost` ke domain GitHub Pages membuat sesi guest baru; database lama tetap tersimpan, tetapi mengetik nama pengajar yang sama tidak memulihkan atau menggabungkan sesi/skor karena nama bukan identitas pemulihan. Skor pemain lokal tetap kumulatif untuk akun pengajar yang sama dan nama anak yang sama setelah normalisasi (spasi tepi dibuang, huruf besar/kecil disamakan). Mengganti akun pengajar atau nama anak menghasilkan identitas peringkat terpisah.
+**Catatan sesi dan peringkat:** sesi guest tersimpan sebagai token opaque di penyimpanan browser dan berlaku 30 hari. Login memakai UUID akun Supabase sebagai identitas pengajar, roster siswa lokal, dan pemilik ruang sehingga tetap sama di origin/perangkat yang berbeda dalam proyek Supabase yang sama. Sesi guest lama tidak otomatis digabung ke akun guru; saat pertama kali beralih, browser melepaskan token dan penunjuk ruang guest lokalnya. Data guest lama tetap tersimpan sebagai identitas terpisah. Skor siswa lokal berlanjut untuk akun pengajar yang sama dan nama anak yang sama setelah normalisasi (spasi tepi dibuang, huruf besar/kecil disamakan). Mengganti akun pengajar atau nama anak menghasilkan identitas peringkat terpisah.
 
 ## Status rilis
 

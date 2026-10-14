@@ -49,7 +49,7 @@ test("static API sends the agreed RPC envelope and opaque client tokens", async 
   assert.equal(captured.init.headers.Authorization, "Bearer public-test-key");
   assert.deepEqual(captured.body, {
     p_path: "/rooms/r1/sync", p_method: "GET", p_body: { afterSequence: 8 },
-    p_session_token: "session-test-token", p_admin_token: "admin-test-token", p_request_id: "retry-1",
+    p_session_token: "session-test-token", p_admin_token: null, p_request_id: "retry-1",
   });
 });
 
@@ -58,6 +58,23 @@ test("API stores returned session token and removes it on logout", async () => {
   await api("/auth/me", undefined, "me-1", "GET");
   assert.equal(values.get("ular-session-token"), "rotated-session");
   await api("/auth/logout", {}, "logout-1");
+  assert.equal(values.has("ular-session-token"), false);
+});
+
+test("auth cleanup invalidates an in-flight response before it can return data or store its token", async () => {
+  values.delete("ular-session-token");
+  let releaseFetch;
+  let notifyStarted;
+  const started = new Promise((resolve) => { notifyStarted = resolve; });
+  globalThis.fetch = async () => {
+    notifyStarted();
+    return new Promise((resolve) => { releaseFetch = resolve; });
+  };
+  const pending = api("/teacher/session", {}, "deferred-session-1");
+  await started;
+  clearSessionTokens();
+  releaseFetch(Response.json({ ok: true, status: 200, data: { id: "teacher-a" }, meta: { sessionToken: "stale-teacher-token" } }));
+  await assert.rejects(pending, (error) => error instanceof ApiError && error.code === "SESSION_CHANGED");
   assert.equal(values.has("ular-session-token"), false);
 });
 

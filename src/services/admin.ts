@@ -17,19 +17,6 @@ export type AdminQuestionsResponse = {
   questions: AdminQuestion[];
 };
 
-export type AdminSessionResponse = {
-  ok: boolean;
-  persistenceEnabled?: boolean;
-};
-
-export type AdminSessionCreateResponse = {
-  ok: boolean;
-};
-
-export type AdminSessionLogoutResponse = {
-  ok: boolean;
-};
-
 export type AdminQuestionCreateResponse = AdminQuestion;
 export type AdminQuestionUpdateResponse = AdminQuestion;
 export type AdminQuestionDeleteResponse = { ok: boolean };
@@ -71,39 +58,33 @@ async function request<T>(
   }
 }
 
-export async function createSession(
-  secret: string
-): Promise<AdminSessionCreateResponse> {
-  return request<AdminSessionCreateResponse>("/admin/session", { body: { secret } });
+export async function createTeacherGameSession(): Promise<{ id: string; username: string; xp: number; coins: number; level: number; classroomHost: true; teacherRole: "teacher" }> {
+  return request("/teacher/session", { method: "POST", body: {} });
 }
 
-export async function getSession(): Promise<AdminSessionResponse> {
-  return request<AdminSessionResponse>("/admin/session");
-}
-
-export async function logoutSession(): Promise<AdminSessionLogoutResponse> {
-  return request<AdminSessionLogoutResponse>("/admin/session/logout", { body: {} });
+export async function logoutTeacherGameSession(): Promise<{ ok: boolean }> {
+  return request("/teacher/session/logout", { method: "POST", body: {} });
 }
 
 export async function getQuestions(): Promise<AdminQuestionsResponse> {
-  return request<AdminQuestionsResponse>("/admin/questions");
+  return request<AdminQuestionsResponse>("/teacher/questions");
 }
 
 export async function createQuestion(
   question: Omit<AdminQuestion, "id" | "updatedAt">
 ): Promise<AdminQuestionCreateResponse> {
-  return request<AdminQuestionCreateResponse>("/admin/questions", { body: question });
+  return request<AdminQuestionCreateResponse>("/teacher/questions", { body: question });
 }
 
 export async function updateQuestion(
   id: string,
   question: Omit<AdminQuestion, "id" | "updatedAt">
 ): Promise<AdminQuestionUpdateResponse> {
-  return request<AdminQuestionUpdateResponse>(`/admin/questions/${encodeURIComponent(id)}`, { body: question });
+  return request<AdminQuestionUpdateResponse>(`/teacher/questions/${encodeURIComponent(id)}`, { body: question });
 }
 
 export async function deleteQuestion(
   id: string
 ): Promise<AdminQuestionDeleteResponse> {
-  return request<AdminQuestionDeleteResponse>(`/admin/questions/${encodeURIComponent(id)}`, { method: "DELETE" });
+  return request<AdminQuestionDeleteResponse>(`/teacher/questions/${encodeURIComponent(id)}`, { method: "DELETE" });
 }

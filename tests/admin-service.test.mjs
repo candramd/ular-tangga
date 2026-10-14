@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  createSession, getSession, logoutSession, getQuestions,
+  getQuestions,
   createQuestion, updateQuestion, deleteQuestion, AdminApiError,
+  createTeacherGameSession, logoutTeacherGameSession,
 } from "../src/services/admin.ts";
 
 const originalFetch = globalThis.fetch;
@@ -39,38 +40,35 @@ test.after(() => {
   else process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = originalKey;
 });
 
-test("getQuestions calls the admin RPC read route", async () => {
+test("getQuestions calls the teacher-owned RPC read route", async () => {
   const mock = mockFetch(() => success(questionsResponse));
   try {
     assert.deepEqual(await getQuestions(), questionsResponse);
     assert.equal(mock.captured.url, "https://example.supabase.co/rest/v1/rpc/ular_api");
     assert.equal(mock.captured.init.method, "POST");
     assert.equal(mock.captured.init.cache, "no-store");
-    assert.equal(input(mock.captured).p_path, "/admin/questions");
+    assert.equal(input(mock.captured).p_path, "/teacher/questions");
     assert.equal(input(mock.captured).p_method, "GET");
     assert.deepEqual(input(mock.captured).p_body, {});
   } finally { mock.restore(); }
 });
 
-test("createSession sends its secret only as an RPC method body", async () => {
-  const mock = mockFetch(() => success(okResponse));
+test("teacher session creation is delegated to the database identity", async () => {
+  const mock = mockFetch(() => success({ id: "teacher-uuid", username: "Guru", xp: 0, coins: 0, level: 1, classroomHost: true, teacherRole: "teacher" }));
   try {
-    await createSession("secret123");
-    assert.equal(input(mock.captured).p_path, "/admin/session");
+    await createTeacherGameSession();
+    assert.equal(input(mock.captured).p_path, "/teacher/session");
     assert.equal(input(mock.captured).p_method, "POST");
-    assert.deepEqual(input(mock.captured).p_body, { secret: "secret123" });
-    assert.equal(mock.captured.init.headers.apikey, "public-test-key");
-    assert.equal(mock.captured.init.headers.Authorization, "Bearer public-test-key");
+    assert.deepEqual(input(mock.captured).p_body, {});
   } finally { mock.restore(); }
 });
 
-test("logoutSession uses the documented logout route", async () => {
+test("teacher session logout uses the role-bound RPC path", async () => {
   const mock = mockFetch(() => success(okResponse));
   try {
-    assert.deepEqual(await logoutSession(), okResponse);
-    assert.equal(input(mock.captured).p_path, "/admin/session/logout");
+    await logoutTeacherGameSession();
+    assert.equal(input(mock.captured).p_path, "/teacher/session/logout");
     assert.equal(input(mock.captured).p_method, "POST");
-    assert.deepEqual(input(mock.captured).p_body, {});
   } finally { mock.restore(); }
 });
 
@@ -79,7 +77,7 @@ test("createQuestion sends the question object as p_body", async () => {
   const question = { question: "Q?", options: ["A", "B"], answer: 1, explanation: "exp", category: "cat", difficulty: "sedang", timeLimit: 45, active: true };
   try {
     assert.deepEqual(await createQuestion(question), questionResponse);
-    assert.equal(input(mock.captured).p_path, "/admin/questions");
+    assert.equal(input(mock.captured).p_path, "/teacher/questions");
     assert.equal(input(mock.captured).p_method, "POST");
     assert.deepEqual(input(mock.captured).p_body, question);
   } finally { mock.restore(); }
@@ -90,7 +88,7 @@ test("updateQuestion encodes the identifier into its RPC path", async () => {
   const question = { question: "Updated", options: ["X", "Y"], answer: 0, explanation: "e", category: "c", difficulty: "sulit", timeLimit: 60, active: false };
   try {
     await updateQuestion("q id with spaces", question);
-    assert.equal(input(mock.captured).p_path, "/admin/questions/q%20id%20with%20spaces");
+    assert.equal(input(mock.captured).p_path, "/teacher/questions/q%20id%20with%20spaces");
     assert.deepEqual(input(mock.captured).p_body, question);
   } finally { mock.restore(); }
 });
@@ -99,7 +97,7 @@ test("deleteQuestion uses DELETE without smuggling an action into the body", asy
   const mock = mockFetch(() => success({ ok: true }));
   try {
     assert.deepEqual(await deleteQuestion("q-1"), { ok: true });
-    assert.equal(input(mock.captured).p_path, "/admin/questions/q-1");
+    assert.equal(input(mock.captured).p_path, "/teacher/questions/q-1");
     assert.equal(input(mock.captured).p_method, "DELETE");
     assert.deepEqual(input(mock.captured).p_body, {});
   } finally { mock.restore(); }
@@ -109,7 +107,7 @@ test("deleteQuestion encodes slashes and query characters in its identifier", as
   const mock = mockFetch(() => success({ ok: true }));
   try {
     await deleteQuestion("special/id?chars");
-    assert.equal(input(mock.captured).p_path, "/admin/questions/special%2Fid%3Fchars");
+    assert.equal(input(mock.captured).p_path, "/teacher/questions/special%2Fid%3Fchars");
   } finally { mock.restore(); }
 });
 
@@ -131,7 +129,7 @@ test("RPC error envelope becomes AdminApiError with server code and message", as
 test("malformed RPC response receives a safe generic error", async () => {
   const mock = mockFetch(() => Response.json({}, { status: 503 }));
   try {
-    await assert.rejects(getSession(), (error) => error instanceof AdminApiError && error.code === "SERVER_ERROR" && error.status === 503);
+    await assert.rejects(getQuestions(), (error) => error instanceof AdminApiError && error.code === "SERVER_ERROR" && error.status === 503);
   } finally { mock.restore(); }
 });
 

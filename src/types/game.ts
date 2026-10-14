@@ -1,8 +1,8 @@
-export type User = { id: string; username: string; xp: number; coins: number; level: number; synthetic?: boolean; classroomHost?: boolean };
+export type User = { id: string; username: string; xp: number; coins: number; level: number; synthetic?: boolean; classroomHost?: boolean; teacherRole?: "teacher" | "student" };
 export type Player = User & { position: number; isConnected: boolean };
 export type Room = {
   id: string; code: string; hostId: string; status: "waiting" | "playing" | "finished";
-  mode?: "local"; isPublic: boolean; players: Player[]; gameId?: string;
+  mode?: "local"; isPublic: boolean; players: Player[]; gameId?: string; teacherId?: string;
 };
 export type Question = {
   id: string; question: string; options: string[]; category: string;

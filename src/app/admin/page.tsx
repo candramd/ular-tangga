@@ -3,7 +3,7 @@ import AdminApp from "@/components/AdminApp";
 import "./admin.css";
 
 export const metadata: Metadata = {
-  title: "Panel Admin | Ular Tangga Adventure",
+  title: "Panel Guru | Ular Tangga Adventure",
   robots: { index: false, follow: false },
 };
 
