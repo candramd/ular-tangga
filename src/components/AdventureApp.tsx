@@ -8,6 +8,8 @@ import { rankRoster } from "@/services/rank-roster";
 import { readStoredSetting, resolveQuality, resolveReducedMotion } from "@/services/settings";
 import { DICE_RELEASE_MS, DICE_ROLL_DURATION_MS } from "@/game/dice-motion";
 import { connectGame } from "@/services/websocket";
+import { createVisiblePoller } from "@/services/visible-poller";
+import { createGameStateFallbackPoller } from "@/services/game-state-fallback";
 import { serverNow } from "@/services/server-clock";
 import { useGameStore } from "@/stores/game.store";
 import type { AnswerResult, Game, LeaderboardEntry, Room, User } from "@/types/game";
@@ -116,25 +118,25 @@ export default function AdventureApp({ initialCode, initialGameId }: { initialCo
   const players = game?.players || room?.players || [];
   const localNamesReady = localNames.length >= 2 && localNames.length <= 4 && localNames.every((name) => name.trim().length >= 2);
 
-  const refreshLeaderboard = useCallback(async () => {
-    const entries = await api<LeaderboardEntry[]>("/leaderboard");
-    setLeaderboard(Array.isArray(entries) ? entries : []);
-    setError("");
-  }, []);
 
   useEffect(() => {
     if (tab !== "leaderboard" || !user) return;
     let active = true;
-    const refresh = () => refreshLeaderboard().catch((e) => { if (active) setError(e instanceof Error ? e.message : "Peringkat belum dapat dimuat."); });
-    refresh();
-    const interval = setInterval(refresh, 5000);
-    return () => { active = false; clearInterval(interval); };
-  }, [tab, user?.id, refreshLeaderboard]);
+    const stop = createVisiblePoller(async () => {
+      try {
+        const entries = await api<LeaderboardEntry[]>("/leaderboard");
+        if (!active) return null;
+        setLeaderboard(Array.isArray(entries) ? entries : []);
+        setError("");
+      } catch (e) {
+        if (active) setError(e instanceof Error ? e.message : "Peringkat belum dapat dimuat.");
+      }
+      return 5000;
+    });
+    return () => { active = false; stop(); };
+  }, [tab, user?.id]);
 
-  useEffect(() => {
-    if (!user) return;
-    void refreshLeaderboard().catch(() => {});
-  }, [user?.id, game?.id, game?.status, game?.turnState, game?.turnNumber, connection, refreshLeaderboard]);
+
 
   async function perform(action: () => Promise<void>) {
     if (busy) return;
@@ -249,21 +251,22 @@ export default function AdventureApp({ initialCode, initialGameId }: { initialCo
     return () => { cancelled = true; };
   }, [room?.gameId, setGame, homeMode]);
 
-  // Realtime stays primary; polling only rescues a client whose WebSocket cannot
-  // connect, so turns and positions still arrive within seconds.
+  // A state refresh is a fallback while the sync poller is reconnecting.
   useEffect(() => {
     if (homeMode || !room?.gameId || connection === "connected") return;
     const gameId = room.gameId;
-    const interval = setInterval(() => {
-      const state = useGameStore.getState();
-      if (state.game?.id !== gameId) return;
-      const roll = state.diceRoll;
-      if (roll && Date.now() - roll.startedAt < DICE_ROLL_DURATION_MS) return;
-      api<Game>(`/games/${gameId}/state`).then((g) => {
-        if (useGameStore.getState().game?.id === gameId) setGame(g);
-      }).catch(() => {});
-    }, 3000);
-    return () => clearInterval(interval);
+    let active = true;
+    const stop = createGameStateFallbackPoller(gameId, {
+      isActive: () => active && useGameStore.getState().connection !== "connected",
+      getGame: () => useGameStore.getState().game,
+      setGame,
+      shouldDefer: () => {
+        const roll = useGameStore.getState().diceRoll;
+        return !!roll && Date.now() - roll.startedAt < DICE_ROLL_DURATION_MS;
+      },
+      fetchGame: (id) => api<Game>(`/games/${id}/state`),
+    });
+    return () => { active = false; stop(); };
   }, [room?.gameId, connection, setGame, homeMode]);
 
   useEffect(() => { setSelected(null); }, [game?.question?.id, game?.turnNumber]);

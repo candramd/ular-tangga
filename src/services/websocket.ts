@@ -1,14 +1,15 @@
-import { useGameStore } from "@/stores/game.store";
-import type { AnswerResult, Game, GameEvent, Room } from "@/types/game";
-import { createEventQueue } from "./event-queue";
-import { DICE_ROLL_DURATION_MS } from "@/game/dice-motion";
-import { api } from "./api";
-import { requestId } from "./api";
-import { setServerTime } from "./server-clock";
+import { useGameStore } from "../stores/game.store.ts";
+import type { AnswerResult, Game, GameEvent, Room } from "../types/game.ts";
+import { createEventQueue } from "./event-queue.ts";
+import { DICE_ROLL_DURATION_MS } from "../game/dice-motion.ts";
+import { api } from "./api.ts";
+import { requestId } from "./api.ts";
+import { setServerTime } from "./server-clock.ts";
+import { createVisiblePoller, type VisiblePollOptions } from "./visible-poller.ts";
 
 type SyncResponse = { room: Room; game?: Game; events: GameEvent[]; sequence: number; serverTime: string };
-export function connectGame(roomId: string, gameId?: string) {
-  let stopped = false, sequence: number | undefined, timer: ReturnType<typeof setTimeout> | undefined;
+export function connectGame(roomId: string, gameId?: string, pollOptions?: VisiblePollOptions) {
+  let stopped = false, sequence: number | undefined;
   let failures = 0;
   const store = useGameStore.getState;
   let stepDelay = 300;
@@ -29,11 +30,11 @@ export function connectGame(roomId: string, gameId?: string) {
     }
   }, (message) => message.event === "player:step" ? stepDelay : message.event === "dice:rolled" ? DICE_ROLL_DURATION_MS : 0);
 
-  const poll = async () => {
-    if (stopped) return;
+  const stopPolling = createVisiblePoller(async () => {
+    if (stopped) return null;
     try {
       const response = await api<SyncResponse>(`/rooms/${encodeURIComponent(roomId)}/sync`, { ...(sequence === undefined ? {} : { afterSequence: sequence }), ...(gameId ? { gameId } : {}) }, requestId());
-      if (stopped || store().room?.id !== roomId || (gameId && store().game?.id && store().game?.id !== gameId)) return;
+      if (stopped || store().room?.id !== roomId || (gameId && store().game?.id && store().game?.id !== gameId)) return null;
       failures = 0;
       store().setConnection("connected");
       setServerTime(response.serverTime);
@@ -44,15 +45,15 @@ export function connectGame(roomId: string, gameId?: string) {
       // The initial snapshot already includes the full state. Animating its historic events would replay an old turn.
       if (!initialSync) incoming.forEach((event) => queue.push(event));
       sequence = Math.max(sequence ?? -1, response.sequence ?? -1);
-      timer = setTimeout(poll, response.room?.status === "playing" ? 1200 : 2000);
+      if (response.room?.status === "finished" || response.game?.status === "finished") return null;
+      return response.room?.status === "playing" ? 1200 : 2000;
     } catch {
-      if (stopped) return;
+      if (stopped) return null;
       failures++;
       store().setConnection("offline");
-      timer = setTimeout(poll, Math.min(1000 * 2 ** Math.min(failures, 4), 15000));
+      return Math.min(1000 * 2 ** Math.min(failures, 4), 15000);
     }
-  };
+  }, pollOptions);
   store().setConnection("connecting");
-  void poll();
-  return () => { stopped = true; if (timer) clearTimeout(timer); queue.dispose(); store().setDiceRoll(null); store().setConnection("offline"); };
+  return () => { stopped = true; stopPolling(); queue.dispose(); store().setDiceRoll(null); store().setConnection("offline"); };
 }

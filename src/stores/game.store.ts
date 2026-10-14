@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import type { AnswerResult, Game, Player, Room, User } from "@/types/game";
-import type { DiceRoll } from "@/game/dice-motion";
+import type { AnswerResult, Game, Player, Room, User } from "../types/game.ts";
+import type { DiceRoll } from "../game/dice-motion.ts";
 
 type State = {
   user: User | null; room: Room | null; game: Game | null;

@@ -9,6 +9,7 @@ const databaseUrl = process.env.TEST_WRITER_LOCK_DATABASE_URL || "";
 const enabled = process.env.TEST_ALLOW_WRITER_LOCK_REHEARSAL === "true" && !!databaseUrl;
 const skipReason = enabled ? false : "Set TEST_WRITER_LOCK_DATABASE_URL and TEST_ALLOW_WRITER_LOCK_REHEARSAL=true for a dedicated local PostgreSQL fixture";
 const migrationPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../supabase/migrations/008_shared_rpc_writer_gate.sql");
+const recoveryPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../scripts/recovery/restore-exclusive-rpc-gate.sql");
 
 function numericLoopbackAddress(hostname) {
   const address = hostname.replace(/^\[|\]$/g, "");
@@ -35,7 +36,7 @@ function connectionEnvironment() {
   }
   const env = { ...process.env };
   for (const key of Object.keys(env)) if (key.startsWith("PG")) delete env[key];
-    env.PGHOST = address;
+  env.PGHOST = address;
   env.PGPORT = parsed.port || "5432";
   env.PGUSER = decodeURIComponent(parsed.username || "postgres");
   env.PGPASSWORD = decodeURIComponent(parsed.password || "");
@@ -58,6 +59,12 @@ function command(sql) {
     env: connectionEnvironment(), encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
   });
   return output.split(/\r?\n/).map((line) => line.trim()).filter((line) => line === "t" || line === "f").at(-1) || "";
+}
+
+function applyTransactionalSql(filePath) {
+  return execFileSync("psql", ["-X", "-v", "ON_ERROR_STOP=1", "--single-transaction", "-f", filePath], {
+    env: connectionEnvironment(), encoding: "utf8", stdio: ["ignore", "ignore", "ignore"],
+  });
 }
 
 function launch() {
@@ -129,9 +136,7 @@ test("RPC shared writer gate admits concurrent RPCs while excluding the Go write
 
     // Reapplying the migration while Go owns the lock must fail before changing
     // the installed function, then the writer can release it normally.
-    assert.throws(() => execFileSync("psql", ["-X", "-v", "ON_ERROR_STOP=1", "--single-transaction", "-f", migrationPath], {
-      env: connectionEnvironment(), encoding: "utf8", stdio: ["ignore", "ignore", "ignore"],
-    }), "migration 008 must refuse to replace the gate while Go owns its lock");
+    assert.throws(() => applyTransactionalSql(migrationPath), "migration 008 must refuse to replace the gate while Go owns its lock");
     assert.equal(command("SELECT pg_get_functiondef('public.ular_writer_available()'::regprocedure) LIKE '%pg_try_advisory_xact_lock_shared%';"), "t", "failed migration must leave the installed gate unchanged");
 
     goWriter.stdin.end("SELECT pg_sleep(0.2);\nSELECT pg_advisory_unlock(821471036219);\n");
@@ -144,6 +149,37 @@ test("RPC shared writer gate admits concurrent RPCs while excluding the Go write
     await Promise.all(clients.map((child) => waitForLine(child, "t")));
     for (const child of clients) child.stdin.end("SELECT pg_sleep(0.15);\nCOMMIT;\n");
     await Promise.all(clients.map((child) => waitExit(child)));
+
+    // The explicit recovery artifact must refuse an active RPC, preserve its
+    // shared gate on failure, then restore the former exclusive helper without
+    // changing data. The 008 migration must safely return to current behavior.
+    const stateQuery = "SELECT version::text || '|' || md5(state::text) FROM public.ular_server_state WHERE id=1;";
+    const beforeRecovery = execFileSync("psql", ["-X", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-c", stateQuery], {
+      env: connectionEnvironment(), encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    const activeRpc = start("BEGIN;\nSELECT public.ular_writer_available();");
+    await waitForLine(activeRpc, "t");
+    assert.throws(() => applyTransactionalSql(recoveryPath), "exclusive-gate recovery must refuse active shared RPCs");
+    assert.equal(command("SELECT pg_get_functiondef('public.ular_writer_available()'::regprocedure) LIKE '%pg_try_advisory_xact_lock_shared%';"), "t", "failed recovery must retain the shared gate");
+    activeRpc.stdin.end("COMMIT;\n");
+    await waitExit(activeRpc);
+
+    applyTransactionalSql(recoveryPath);
+    assert.equal(command("SELECT pg_get_functiondef('public.ular_writer_available()'::regprocedure) LIKE '%pg_try_advisory_xact_lock(821471036219)%';"), "t", "recovery must restore the previous exclusive transaction helper");
+    assert.equal(command("SELECT pg_get_functiondef('public.ular_writer_available()'::regprocedure) LIKE '%pg_try_advisory_xact_lock_shared%';"), "f");
+    const exclusiveRpc = start("BEGIN;\nSELECT public.ular_writer_available();");
+    await waitForLine(exclusiveRpc, "t");
+    assert.equal(command("SELECT public.ular_writer_available();"), "f", "exclusive recovery gate serializes RPC transactions");
+    assert.equal(command("SELECT pg_try_advisory_lock(821471036219);"), "f", "Go session lock remains excluded during recovery mode");
+    exclusiveRpc.stdin.end("COMMIT;\n");
+    await waitExit(exclusiveRpc);
+
+    applyTransactionalSql(migrationPath);
+    assert.equal(command("SELECT pg_get_functiondef('public.ular_writer_available()'::regprocedure) LIKE '%pg_try_advisory_xact_lock_shared%';"), "t", "migration 008 must restore the current shared gate");
+    const afterRecovery = execFileSync("psql", ["-X", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-c", stateQuery], {
+      env: connectionEnvironment(), encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    assert.equal(afterRecovery, beforeRecovery, "round trip must preserve snapshot version and digest");
   } finally {
     for (const child of active) child.kill("SIGTERM");
   }
