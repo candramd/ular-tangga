@@ -449,7 +449,8 @@ def main() -> None:
         migrations = apply_migrations(db_name, db_env, args.through_migration)
         psql(db_name, """
 INSERT INTO public.ular_server_state(id,version,state) VALUES
-(1,1,'{"users":{},"sessions":{},"rooms":{},"games":{},"requests":{},"stats":{},"questions":{},"adminSessions":{},"localStudentOwners":{},"localStudentRoster":{}}'::jsonb);
+(1,1,'{"users":{},"sessions":{},"rooms":{},"games":{},"requests":{},"stats":{},"questions":{},"adminSessions":{},"localStudentOwners":{},"localStudentRoster":{}}'::jsonb)
+ON CONFLICT(id) DO NOTHING;
 INSERT INTO public.ular_admin_config(singleton,secret_hash)
 VALUES(true,extensions.crypt('local-only-polling-benchmark-secret',extensions.gen_salt('bf')))
 ON CONFLICT(singleton) DO UPDATE SET secret_hash=excluded.secret_hash,login_attempts=0,locked_until=NULL;

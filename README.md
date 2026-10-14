@@ -40,7 +40,7 @@ python3 scripts/rehearse_supabase_polling_load.py --through-migration 7
 python3 scripts/rehearse_supabase_polling_load.py --through-migration 8
 ```
 
-Harness membuat database disposable di PostgreSQL loopback, mengisi data sintetis, menjalankan simulasi polling/reconnect/write 30 client, lalu menghapus database. Hasilnya hanya diagnostik SQL lokal, bukan uji kuota Supabase hosted. Tes pembersihan DB memerlukan `RUN_LOCAL_POLLING_DB_TESTS=1 python3 -m unittest tests.test_supabase_polling_load -v`; tanpa flag itu, tes tersebut dilewati.
+Harness membuat database disposable di PostgreSQL loopback, mengisi data sintetis, menjalankan simulasi polling/reconnect/write 30 client, lalu menghapus database. Hasilnya hanya diagnostik SQL lokal, bukan uji kuota Supabase hosted. Tes pembersihan DB memerlukan `RUN_LOCAL_POLLING_DB_TESTS=1 python3 -m unittest tests.test_supabase_polling_load -v`; tanpa flag itu, tes tersebut dilewati. Uji lock Go/RPC pada `tests/integration/supabase-writer-lock.test.mjs` juga memerlukan `TEST_WRITER_LOCK_DATABASE_URL` yang menunjuk database loopback disposable `ular_lock_test_*` yang sudah menjalankan migrasi 008, serta `TEST_ALLOW_WRITER_LOCK_REHEARSAL=true`. Jangan arahkan tes ke database produksi.
 
 Untuk menguji pergantian dua artifact GitHub Pages yang sudah diunduh, jalankan `python3 scripts/rehearse-pages-artifact-rollback.py --current /path/current/artifact.tar --previous /path/previous/artifact.tar --base-path /ular-tangga`. Rehearsal mengekstrak ke direktori sementara dan hanya melayani loopback; ini tidak menerbitkan ulang situs atau mengganti backend.
 
