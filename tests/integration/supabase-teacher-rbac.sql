@@ -1,4 +1,4 @@
--- Run only against a disposable PostgreSQL fixture after migrations 002-009.
+-- Run only against a disposable PostgreSQL fixture after all migrations.
 -- The fixture supplies auth.users/auth.uid(); never use production.
 BEGIN;
 INSERT INTO auth.users(id,email,email_confirmed_at,raw_app_meta_data,is_anonymous,encrypted_password) VALUES
@@ -119,8 +119,7 @@ BEGIN
   result:=public.ular_api('/rooms/'||(payload->>'code')||'/join','POST','{}'::jsonb,(SELECT token FROM guest_fixture WHERE seq=4),NULL,'fixture-teacher-b-student-join-01');
   IF result->>'ok'<>'true' THEN RAISE EXCEPTION 'student could not join teacher B room'; END IF;
   result:=public.ular_api('/rooms/'||(payload->>'roomId')||'/start','POST','{}'::jsonb,token_b,NULL,'fixture-teacher-b-room-start-01');
-  IF result->>'ok'<>'true' OR jsonb_array_length(result->'data'->'players')<>2 OR result->'data'->'question' ? 'answer' THEN RAISE EXCEPTION 'teacher B room did not start safely'; END IF;
-  INSERT INTO game_fixture VALUES('empty',result->'data'->>'id');
+  IF result->>'ok'<>'false' OR (result->>'status')::integer<>409 OR result->'error'->>'code'<>'NO_ACTIVE_QUESTIONS' THEN RAISE EXCEPTION 'empty teacher bank should block game start: %',result; END IF;
 
 END $$;
 RESET ROLE;
@@ -129,14 +128,11 @@ END $$;
 DO $$ DECLARE game jsonb; bank jsonb; BEGIN
   SELECT state->'games'->(SELECT id FROM game_fixture WHERE kind='shared') INTO game FROM public.ular_server_state WHERE id=1;
   bank:=game->'bank'->'items';
-  IF NOT bank @> '[{"id":"legacy-legacy-fixture"}]'::jsonb THEN RAISE EXCEPTION 'legacy global active question was lost from shared guest bank'; END IF;
-  IF jsonb_array_length(bank)<>2 THEN RAISE EXCEPTION 'shared guest bank did not include exactly active teacher uploads plus preserved legacy question'; END IF;
+  IF bank @> '[{"id":"legacy-legacy-fixture"}]'::jsonb THEN RAISE EXCEPTION 'legacy question entered shared guest bank'; END IF;
+  IF jsonb_array_length(bank)<>1 OR bank->0->>'question'<>'Owned by A?' THEN RAISE EXCEPTION 'shared guest bank must contain only active teacher uploads'; END IF;
   SELECT state->'games'->(SELECT id FROM game_fixture WHERE kind='owned') INTO game FROM public.ular_server_state WHERE id=1;
   bank:=game->'bank'->'items';
   IF jsonb_array_length(bank)<>1 OR bank->0->>'id' IS NULL OR bank->0->>'question'<>'Owned by A?' THEN RAISE EXCEPTION 'teacher-created room did not use only its owner bank'; END IF;
-  SELECT state->'games'->(SELECT id FROM game_fixture WHERE kind='empty') INTO game FROM public.ular_server_state WHERE id=1;
-  bank:=game->'bank'->'items';
-  IF jsonb_array_length(bank)<>0 OR game->'view'->'question'->>'question' IN ('Owned by A?','Legacy shared question?') THEN RAISE EXCEPTION 'empty teacher bank used another teacher or legacy custom question'; END IF;
 END $$;
 RESET ROLE;
 UPDATE public.ular_server_state

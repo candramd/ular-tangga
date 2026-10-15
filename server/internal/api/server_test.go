@@ -36,6 +36,9 @@ func setup(t *testing.T, store Store) *fixture {
 		t.Fatal(err)
 	}
 	f.s = s
+	if len(s.data.Questions) == 0 {
+		s.data.Questions["fixture"] = engine.BankQuestion{ID: "fixture", Question: "Teacher fixture?", Options: []string{"A", "B", "C", "D"}, Answer: 1, Active: true}
+	}
 	f.http = httptest.NewServer(s.Handler())
 	t.Cleanup(f.http.Close)
 	return f
@@ -687,7 +690,7 @@ func TestLocalRoomSingleDevice(t *testing.T) {
 	if !seen[host.Username] || !seen[nara.Username] || !seen[bima.Username] {
 		t.Fatalf("local players missing from cumulative leaderboard: %+v", entries)
 	}
-	if strings.Contains(string(raw), "localStudentOwners") || strings.Contains(string(raw), "xp") || strings.Contains(string(raw), "coins") {
+	if strings.Contains(string(raw), `"localStudentOwners":`) || strings.Contains(string(raw), `"xp":`) || strings.Contains(string(raw), `"coins":`) {
 		t.Fatalf("private or unrelated fields leaked in leaderboard: %s", raw)
 	}
 	// Host leaving dissolves the room and its game.

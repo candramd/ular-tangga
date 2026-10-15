@@ -151,6 +151,7 @@ var (
 	ErrState      = errors.New("action is not available in the current turn state")
 	ErrQuestion   = errors.New("question does not match the current turn")
 	ErrDiceLocked = errors.New("dice is not unlocked")
+	ErrBankEmpty  = errors.New("add and activate a teacher question before starting the game")
 )
 
 func New(id, roomID string, players []Player, board Board, bank *Bank, now time.Time) (*State, error) {
@@ -171,6 +172,9 @@ func New(id, roomID string, players []Player, board Board, bank *Bank, now time.
 	// questions already drawn or to be drawn by an in-flight game.
 	if bank != nil {
 		bank = NewBank(bank.Items)
+	}
+	if bank.Empty() {
+		return nil, ErrBankEmpty
 	}
 	s := &State{View: Game{ID: id, RoomID: roomID, Status: "playing", Players: append([]Player(nil), players...), TotalSteps: board.TotalSteps, Snakes: maps.Clone(board.Snakes), Ladders: maps.Clone(board.Ladders)}, Results: map[string]AnswerResult{}, Bank: bank}
 	if s.View.Snakes == nil {
@@ -225,6 +229,12 @@ func (s *State) index(id string) int {
 }
 
 func (s *State) next(index int, now time.Time) {
+	if s.Bank.Empty() {
+		s.View.Status, s.View.TurnState = "finished", "FINISHED"
+		s.View.Question = nil
+		s.AnswerIndex, s.Explanation = 0, ""
+		return
+	}
 	s.View.TurnNumber++
 	s.View.CurrentPlayerID = s.View.Players[index%len(s.View.Players)].ID
 	s.View.TurnState = "QUESTION"

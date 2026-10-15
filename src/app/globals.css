@@ -1,8 +1,5 @@
 @import "tailwindcss";
 
-/* Hallmark: playful adventure workbench; theme Hum adapted to jungle world.
-   Audience: learners and friends. Signature: a playable terraced island.
-   Pre-emit critique: philosophy 4, hierarchy 4, execution 4, specificity 5, restraint 4, variety 4. */
 :root {
   --color-paper: #f7f8f4; --color-surface: #ffffff; --color-ink: #263b34;
   --color-muted: #7b8881; --color-accent: #247858; --color-accent-dark: #18563d;
@@ -381,3 +378,29 @@ main { max-width: 1580px; margin: 0 auto; padding: 32px 37px 0; }
 .leaderboard-list.compact > div > b { font-size: 11px; }
 .leaderboard-list.compact .leaderboard-badge { font-size: 9px !important; }
 .class-scoreboard .empty-state { min-height: 170px; }
+
+.game-session-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; margin-top: 20px; padding-top: 14px; border-top: 1px solid #dfd1b1; }
+.game-session-info { display: flex; align-items: center; gap: 8px; min-width: 0; color: #887357; }
+.game-session-info > svg { flex: none; }
+.game-session-info > div { display: grid; gap: 2px; text-align: left; }
+.game-session-info span { font-size: 11px; line-height: 1.4; }
+.game-session-info code { color: #684323; font-family: var(--font-body); font-size: 12px; font-weight: 800; letter-spacing: 1px; }
+.game-room-copy { min-height: 44px; padding: 4px 0; border: 0; background: transparent; }
+.game-room-copy:hover { color: var(--color-accent); }
+.game-exit-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 8px 10px; border: 1px solid #dfd1b1; border-radius: 9px; background: transparent; color: #887357; font-size: 11px; font-weight: 700; }
+.game-exit-button:hover:not(:disabled) { border-color: var(--color-error); background: var(--color-error-soft); color: var(--color-error); }
+.play-panel .mobile-roster { margin-top: 14px; border-top: 1px solid #dfd1b1; }
+.play-panel .mobile-roster summary { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 8px 0; list-style: none; cursor: pointer; color: #684323; font-size: 12px; font-weight: 800; }
+.play-panel .mobile-roster summary::-webkit-details-marker { display: none; }
+.play-panel .mobile-roster summary:focus-visible { outline: 3px solid var(--color-gold); outline-offset: 2px; border-radius: 6px; }
+.mobile-roster summary > svg { flex: none; }
+.mobile-roster .roster-chevron { margin-left: auto; }
+.mobile-roster[open] .roster-chevron { transform: rotate(90deg); }
+.play-panel .mobile-roster-body { padding: 0 0 8px; }
+.play-panel .mobile-roster .room-players { margin: 4px 0 12px; }
+.play-panel .mobile-roster .room-player > strong { min-width: 0; overflow-wrap: anywhere; }
+.play-panel .mobile-roster .room-player > span:last-child { margin-left: auto; flex: none; color: #887357; font-size: 11px; }
+@media (max-width: 700px) {
+  .has-active-game .game-session-footer { margin-top: 14px; padding-top: 10px; }
+  .has-active-game .play-panel .mobile-roster { margin-top: 10px; }
+}

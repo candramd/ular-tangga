@@ -379,7 +379,7 @@ export default function AdminApp() {
         {!persistenceEnabled && <div className="admin-warning" role="status"><TriangleAlert size={18} /><span><strong>Penyimpanan belum aktif.</strong>Bank soal saat ini hanya tersimpan di memori server dan akan hilang saat server dimulai ulang.</span></div>}
         {error && <div className="admin-alert error" role="alert"><CircleHelp size={18} /><span>{error}</span><button aria-label="Tutup pesan kesalahan" onClick={() => setError("")}><X size={16} /></button></div>}
         {notice && <div className="admin-toast" role="status"><Check size={17} />{notice}</div>}
-        <div className="admin-persistence-note"><ShieldCheck size={14} />Permainan yang sedang berjalan memakai bank soal yang sudah dimuat. Permainan baru memakai soal custom yang aktif; bila belum ada soal aktif, soal bawaan digunakan.</div>
+        <div className="admin-persistence-note"><ShieldCheck size={14} />Permainan hanya memakai soal aktif milik Anda. Tambahkan dan aktifkan setidaknya satu soal sebelum memulai. Perubahan soal berlaku untuk permainan baru.</div>
         <div className="admin-search-filter">
           <div className="admin-search-field">
             <input className="admin-input" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari pertanyaan, kategori, atau pilihan..." aria-label="Cari soal" />
@@ -392,7 +392,7 @@ export default function AdminApp() {
             </select>
           </div>
         </div>
-        {questions.length === 0 ? <div className="admin-questions-empty"><Leaf size={40} /><p>Bank soal custom masih kosong. Permainan baru tetap bisa dimainkan dengan soal bawaan; tambahkan soal custom kapan saja untuk konten yang lebih spesifik.</p></div> : visibleQuestions.length === 0 ? <div className="admin-questions-empty"><Search size={40} /><p>Tidak ada soal yang cocok dengan kata kunci atau saringan status. Coba kata kunci lain atau tampilkan semua status.</p></div> : visibleQuestions.map((q) => <div className="admin-question-card" key={q.id}>
+        {questions.length === 0 ? <div className="admin-questions-empty"><Leaf size={40} /><p>Bank soal Anda masih kosong. Pilih Tambah soal untuk membuat pertanyaan pertama. Permainan belum dapat dimulai sampai ada soal aktif.</p></div> : visibleQuestions.length === 0 ? <div className="admin-questions-empty"><Search size={40} /><p>Tidak ada soal yang cocok dengan kata kunci atau saringan status. Coba kata kunci lain atau tampilkan semua status.</p></div> : visibleQuestions.map((q) => <div className="admin-question-card" key={q.id}>
           <div className="admin-question-header">
             <div className="admin-question-meta"><span className={`admin-question-badge ${q.active ? "active" : "inactive"}`}>{q.active ? "Aktif" : "Nonaktif"}</span><span className="admin-question-badge">{q.category}</span><span className="admin-question-badge admin-question-difficulty">{q.difficulty}</span><span>{q.timeLimit} dtk</span></div>
           </div>

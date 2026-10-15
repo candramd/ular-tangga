@@ -10,7 +10,8 @@ import (
 func newGame(t *testing.T) (*State, time.Time) {
 	t.Helper()
 	now := time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC)
-	s, err := New("game", "room", []Player{{User: User{ID: "a", Level: 1}}, {User: User{ID: "b", Level: 1}}}, DefaultBoard(100), nil, now)
+	bank := NewBank([]BankQuestion{{ID: "fixture", Question: "Teacher fixture?", Options: []string{"A", "B", "C", "D"}, Answer: 0, Active: true}})
+	s, err := New("game", "room", []Player{{User: User{ID: "a", Level: 1}}, {User: User{ID: "b", Level: 1}}}, DefaultBoard(100), bank, now)
 	if err != nil {
 		t.Fatal(err)
 	}

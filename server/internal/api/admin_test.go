@@ -321,7 +321,7 @@ func TestAdminBankDrivesNewGamesOnly(t *testing.T) {
 		t.Fatalf("correct custom answer did not unlock dice: %+v", state.TurnState)
 	}
 
-	// Deactivating the only question restores builtin questions for new games
+	// Deactivating the only question prevents new games.
 	edited["active"] = false
 	if status, _, _ = f.req(t, "POST", "/api/admin/questions/"+custom.ID, admin, edited); status != 200 {
 		t.Fatal("deactivate failed")
@@ -330,10 +330,9 @@ func TestAdminBankDrivesNewGamesOnly(t *testing.T) {
 	_, raw, _ = f.req(t, "POST", "/api/rooms", a, map[string]any{"requestId": "room3", "isPublic": true})
 	room3 := decode[engine.Room](t, raw)
 	_, _, _ = f.req(t, "POST", "/api/rooms/"+room3.Code+"/join", b, map[string]string{"requestId": "join3"})
-	_, raw, _ = f.req(t, "POST", "/api/rooms/"+room3.ID+"/start", a, map[string]string{"requestId": "start3"})
-	g3 := decode[engine.Game](t, raw)
-	if g3.Question.Question == "Edited question text?" {
-		t.Fatal("inactive question still served to new game")
+	status, raw, _ = f.req(t, "POST", "/api/rooms/"+room3.ID+"/start", a, map[string]string{"requestId": "start3"})
+	if status != 409 {
+		t.Fatalf("empty bank should block game start: %d %s", status, raw)
 	}
 
 	// Deleting the bank question also excludes it
@@ -348,10 +347,9 @@ func TestAdminBankDrivesNewGamesOnly(t *testing.T) {
 	_, raw, _ = f.req(t, "POST", "/api/rooms", a, map[string]any{"requestId": "room4", "isPublic": true})
 	room4 := decode[engine.Room](t, raw)
 	_, _, _ = f.req(t, "POST", "/api/rooms/"+room4.Code+"/join", b, map[string]string{"requestId": "join4"})
-	_, raw, _ = f.req(t, "POST", "/api/rooms/"+room4.ID+"/start", a, map[string]string{"requestId": "start4"})
-	g4 := decode[engine.Game](t, raw)
-	if g4.Question.Question == "Edited question text?" {
-		t.Fatal("deleted question still served to new game")
+	status, raw, _ = f.req(t, "POST", "/api/rooms/"+room4.ID+"/start", a, map[string]string{"requestId": "start4"})
+	if status != 409 {
+		t.Fatalf("deleted bank should block game start: %d %s", status, raw)
 	}
 }
 
@@ -405,6 +403,7 @@ func TestAdminBankSurvivesRestart(t *testing.T) {
 func TestLegacyStatsAndDanglingRoomDoNotPanic(t *testing.T) {
 	store := &memoryStore{}
 	f := setupAdmin(t, store, "")
+	f.s.data.Questions["fixture"] = engine.BankQuestion{ID: "fixture", Question: "Teacher fixture?", Options: []string{"A", "B", "C", "D"}, Answer: 1, Active: true}
 	g, a, _ := f.game(t)
 	// Capture persisted snapshot, strip the winner's stats entry and add a
 	// game whose room is missing to simulate a legacy/partial blob.

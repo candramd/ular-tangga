@@ -5,6 +5,7 @@ export class ApiError extends Error {
 }
 
 const messages: Record<string, string> = {
+  NO_ACTIVE_QUESTIONS: "Belum ada soal aktif. Guru perlu menambahkan dan mengaktifkan soal di Panel guru sebelum permainan dimulai.",
   UNAUTHORIZED: "Sesi berakhir. Masuk kembali untuk melanjutkan.", ROOM_NOT_FOUND: "Ruang tidak ditemukan. Periksa kembali kode ruangnya.", ROOM_FULL: "Ruang sudah penuh. Coba ruang lain atau buat ruang baru.", NOT_PLAYER_TURN: "Tunggu sebentar, ini belum giliranmu.", DICE_NOT_UNLOCKED: "Jawab pertanyaan dengan benar untuk membuka dadu.", FORBIDDEN: "Kamu tidak memiliki akses untuk aksi ini.", ROOM_IS_LOCAL: "Ruang ini hanya untuk pemain di satu perangkat yang sama.", DUPLICATE_PLAYER_NAME: "Nama pemain tidak boleh sama. Gunakan nama yang berbeda.", PLAYER_ID_NOT_ALLOWED: "Aksi atas nama pemain lain hanya untuk mode satu perangkat.",
 };
 const SESSION_KEY = "ular-session-token";

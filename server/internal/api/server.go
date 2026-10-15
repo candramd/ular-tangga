@@ -485,6 +485,7 @@ func errorBody(err error) map[string]any {
 		code = "INVALID_TURN_STATE"
 	default:
 		if specific := map[string]string{
+			engine.ErrBankEmpty.Error():                          "NO_ACTIVE_QUESTIONS",
 			"room not found":                                     "ROOM_NOT_FOUND",
 			"game not found":                                     "GAME_NOT_FOUND",
 			"room membership required":                           "NOT_ROOM_MEMBER",

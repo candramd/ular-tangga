@@ -1,5 +1,6 @@
 \set ON_ERROR_STOP on
 BEGIN;
+\ir supabase-teacher-bank-fixture.sql
 DO $$
 DECLARE
   one jsonb; two jsonb; three jsonb; local_host jsonb; local_room jsonb; online_room jsonb; started jsonb;

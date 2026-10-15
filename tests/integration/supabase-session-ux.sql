@@ -1,5 +1,6 @@
 \set ON_ERROR_STOP on
 BEGIN;
+\ir supabase-teacher-bank-fixture.sql
 CREATE TEMP TABLE ux_renew_tokens(token text);
 CREATE TEMP TABLE ux_existing_users(token text,user_id text);
 GRANT INSERT,SELECT ON ux_renew_tokens TO anon;

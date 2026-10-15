@@ -74,20 +74,12 @@ func TestBankDrawCyclesDeterministically(t *testing.T) {
 	}
 }
 
-func TestBankNilEmptyFallsBackToBuiltin(t *testing.T) {
-	var b *Bank
-	q, ans, expl := b.draw(1)
-	if q.Question == "" || ans < 0 || expl == "" {
-		t.Fatalf("builtin fallback failed: %+v %d %q", q, ans, expl)
-	}
-	if q.TimeLimit != 30 {
-		t.Fatalf("builtin default timeLimit: %d", q.TimeLimit)
-	}
-
-	b = NewBank([]BankQuestion{})
-	q, ans, expl = b.draw(1)
-	if q.Question == "" || ans < 0 || expl == "" {
-		t.Fatalf("empty bank fallback failed: %+v %d %q", q, ans, expl)
+func TestBankNilEmptyRejectsNewGame(t *testing.T) {
+	for _, bank := range []*Bank{nil, NewBank(nil), NewBank([]BankQuestion{{ID: "inactive", Active: false}})} {
+		s, err := New("game", "room", []Player{{User: User{ID: "a"}}, {User: User{ID: "b"}}}, DefaultBoard(100), bank, time.Now())
+		if err != ErrBankEmpty || s != nil {
+			t.Fatalf("empty teacher bank accepted: %v", err)
+		}
 	}
 }
 
@@ -103,8 +95,7 @@ func TestBankOptionsCopied(t *testing.T) {
 }
 
 func TestStateAttachBankUsedAfterRestore(t *testing.T) {
-	now := time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC)
-	s, _ := New("game", "room", []Player{{User: User{ID: "a", Level: 1}}, {User: User{ID: "b", Level: 1}}}, DefaultBoard(100), nil, now)
+	s, now := newGame(t)
 	_ = s.View.Question.Question
 
 	qs := []BankQuestion{{ID: "q-1", Question: "Custom", Options: []string{"X", "Y"}, Answer: 1, Active: true, UpdatedAt: now}}
@@ -116,8 +107,7 @@ func TestStateAttachBankUsedAfterRestore(t *testing.T) {
 }
 
 func TestStateBankSnapshotNotLeaked(t *testing.T) {
-	now := time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC)
-	s, _ := New("game", "room", []Player{{User: User{ID: "a", Level: 1}}, {User: User{ID: "b", Level: 1}}}, DefaultBoard(100), nil, now)
+	s, _ := newGame(t)
 	snap := s.Snapshot()
 	for _, secret := range []string{"answerIndex", "correctAnswer", "explanation", "results", "bank"} {
 		raw, _ := json.Marshal(snap)

@@ -1,9 +1,7 @@
 \set ON_ERROR_STOP on
 BEGIN;
 
--- All writes are synthetic and rolled back. Legacy snapshot questions remain
--- playable in the shared guest pool after migration 009 retires admin login.
-UPDATE public.ular_server_state SET state=jsonb_set(state,'{questions}','{"legacy-fixture-question":{"id":"legacy-fixture-question","question":"Isolated fixture question?","options":["Correct","Wrong"],"answer":0,"explanation":"fixture only","category":"QA","difficulty":"mudah","timeLimit":30,"active":true}}'::jsonb,true) WHERE id=1;
+\ir supabase-teacher-bank-fixture.sql
 
 SET LOCAL ROLE anon;
 DO $$
