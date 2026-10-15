@@ -72,6 +72,7 @@ function Modal({ title, children, onClose, restoreFocus = true }: { title: strin
 export default function AdventureApp({ initialCode, initialGameId }: { initialCode?: string; initialGameId?: string }) {
   const { user, room, game, result, resultTurnNumber, diceRoll, connection, setUser, setRoom, setGame, setResult, resetGameplay } = useGameStore();
   const teacherOwnerRef = useRef<string | null>(user?.teacherRole === "teacher" ? user.id : null);
+  const isRestoringSessionRef = useRef(true);
   const [fullscreen, setFullscreen] = useState(false);
   const shellRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -184,13 +185,16 @@ export default function AdventureApp({ initialCode, initialGameId }: { initialCo
     }
     setHydrated(true);
     let cancelled = false;
+    isRestoringSessionRef.current = true;
     async function restore() {
       try {
         const teacherAuth = await getTeacherSession();
         if (cancelled) return;
+        isRestoringSessionRef.current = false;
         if (teacherAuth) {
           const actorChanged = (teacherOwnerRef.current !== null && teacherOwnerRef.current !== teacherAuth.user.id)
             || (!!getTeacherActorId() && getTeacherActorId() !== teacherAuth.user.id);
+          teacherOwnerRef.current = teacherAuth.user.id;
           if (actorChanged) {
             clearSessionTokens(); clearTeacherActorId(); sessionStorage.removeItem("adventure-room");
             resetGameplay(); setUser(null); setResumeRoom(null);
@@ -263,7 +267,7 @@ export default function AdventureApp({ initialCode, initialGameId }: { initialCo
       } catch (e) {
         if (!cancelled && e instanceof ApiError && e.status !== 401) setError(e.message);
         if (!cancelled && (initialCode || window.location.hash.startsWith("#/room/"))) { setIntent("join"); setModal("login"); }
-      } finally { if (!cancelled) setReady(true); }
+      } finally { if (!cancelled) { isRestoringSessionRef.current = false; setReady(true); } }
     }
     void restore();
     return () => { cancelled = true; };
@@ -281,6 +285,7 @@ export default function AdventureApp({ initialCode, initialGameId }: { initialCo
         nextOwnerId: nextId,
         event,
         hasGuestIdentity: !!currentUser && currentUser.teacherRole !== "teacher",
+        isRestoringSession: isRestoringSessionRef.current,
       })) {
         teacherOwnerRef.current = nextId;
         clearSessionTokens(); clearTeacherActorId(); sessionStorage.removeItem("adventure-room");

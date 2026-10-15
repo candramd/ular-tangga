@@ -69,6 +69,22 @@ test("guest gameplay reconciles when a teacher signs in", () => {
   assert.equal(shouldReconcileAuthIdentity({ currentOwnerId: null, nextOwnerId: "B", event: "SIGNED_IN", hasGuestIdentity: true }), true);
 });
 
+test("startup auth notifications do not reload before session restoration establishes the owner", () => {
+  for (const event of ["SIGNED_IN", "TOKEN_REFRESHED", "INITIAL_SESSION"]) {
+    assert.equal(shouldReconcileAuthIdentity({ currentOwnerId: null, nextOwnerId: "A", event, isRestoringSession: true }), false, event);
+  }
+});
+
+test("restored owner ignores repeated sign-in events while explicit login still reconciles", () => {
+  assert.equal(shouldReconcileAuthIdentity({ currentOwnerId: "A", nextOwnerId: "A", event: "SIGNED_IN", isRestoringSession: false }), false);
+  assert.equal(shouldReconcileAuthIdentity({ currentOwnerId: null, nextOwnerId: "A", event: "SIGNED_IN", isRestoringSession: false }), true);
+  assert.equal(shouldReconcileAuthIdentity({ currentOwnerId: "A", nextOwnerId: "B", event: "SIGNED_IN", isRestoringSession: false }), true);
+});
+
+test("sign-out still clears identity during startup restoration", () => {
+  assert.equal(shouldReconcileAuthIdentity({ currentOwnerId: null, nextOwnerId: null, event: "SIGNED_OUT", isRestoringSession: true }), true);
+});
+
 test("Supabase Auth client is a singleton for all API/session requests", () => {
   const oldUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const oldKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

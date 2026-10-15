@@ -82,6 +82,7 @@ export default function AdminApp() {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const confirmRef = useRef<HTMLDialogElement>(null);
   const teacherOwnerRef = useRef<string | null>(null);
+  const isRestoringSessionRef = useRef(true);
 
   const handleError = useCallback((e: unknown) => {
     if (e instanceof AdminApiError && e.status === 404) {
@@ -110,14 +111,17 @@ export default function AdminApp() {
 
   useEffect(() => {
     let cancelled = false;
+    isRestoringSessionRef.current = true;
     async function restore() {
       try {
         const authSession = await getTeacherSession();
+        if (cancelled) return;
+        teacherOwnerRef.current = authSession?.user.id ?? null;
+        isRestoringSessionRef.current = false;
         if (!authSession) { if (!cancelled) setStatus("logged-out"); return; }
         const teacher = await createTeacherGameSession();
-        teacherOwnerRef.current = teacher.id;
-        setTeacherActorId(teacher.id);
         if (cancelled) return;
+        setTeacherActorId(teacher.id);
         setPersistenceEnabled(true);
         const bank = await getQuestions();
         if (cancelled) return;
@@ -125,6 +129,7 @@ export default function AdminApp() {
         setStatus("ready");
       } catch (e) {
         if (!cancelled) {
+          isRestoringSessionRef.current = false;
           if (e instanceof AdminApiError && e.status === 401) {
             setStatus("logged-out");
           } else {
@@ -142,7 +147,7 @@ export default function AdminApp() {
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) return;
     const { data } = supabaseAuth().auth.onAuthStateChange((event, session) => {
       const nextId = session?.user.id ?? null;
-      if (shouldReconcileAuthIdentity({ currentOwnerId: teacherOwnerRef.current, nextOwnerId: nextId, event })) {
+      if (shouldReconcileAuthIdentity({ currentOwnerId: teacherOwnerRef.current, nextOwnerId: nextId, event, isRestoringSession: isRestoringSessionRef.current })) {
         teacherOwnerRef.current = nextId;
         clearSessionTokens(); clearTeacherActorId(); sessionStorage.removeItem("adventure-room");
         useGameStore.getState().resetGameplay(); setQuestions([]); setStatus("logged-out");
